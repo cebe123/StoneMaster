@@ -1,21 +1,59 @@
-```gitignore
-# PowerShell build script artifacts
+# PowerShell build artifacts
 *.psd1
 *.psm1
 *.pdb
-*.xml
-*.log
+*.dll
+*.exe
 
-# Temp files from PowerShell scripts
-*.tmp
-*.temp
-
-# Build output directories (if any created by the build scripts)
+# Build directories
 build/
 dist/
 output/
-bin/
-obj/
-Debug/
-Release/
-```
+
+# Log files
+*.log
+*.tmp
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage and testing
+coverage/
+htmlcov/
+.coverage
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
