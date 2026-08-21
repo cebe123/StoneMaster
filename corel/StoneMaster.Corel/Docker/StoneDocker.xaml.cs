@@ -288,27 +288,86 @@ namespace StoneMaster.Corel.Docker
 
         private void PreviewCanvas_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
+            // İnteraktif alan seçimi modu
+            if (_interactiveSelectionMode)
+            {
+                var point = e.GetPosition(PreviewCanvas);
+                // Preview canvas koordinatlarını orijinal görsel koordinatlarına çevir
+                if (Vm.LastResponse != null && !string.IsNullOrWhiteSpace(Vm.ImagePath))
+                {
+                    using (var bitmap = new Bitmap(Vm.ImagePath))
+                    {
+                        var imgX = (int)(point.X / PreviewCanvas.Width * bitmap.Width);
+                        var imgY = (int)(point.Y / PreviewCanvas.Height * bitmap.Height);
+                        imgX = Math.Max(0, Math.Min(bitmap.Width - 1, imgX));
+                        imgY = Math.Max(0, Math.Min(bitmap.Height - 1, imgY));
+                        
+                        _interactivePoints.Add((imgX, imgY));
+                        
+                        // Görsel geri bildirim - küçük bir daire çiz
+                        var marker = new Ellipse
+                        {
+                            Width = 8,
+                            Height = 8,
+                            Fill = System.Windows.Media.Brushes.Red,
+                            Stroke = System.Windows.Media.Brushes.White,
+                            StrokeThickness = 1
+                        };
+                        Canvas.SetLeft(marker, point.X - 4);
+                        Canvas.SetTop(marker, point.Y - 4);
+                        PreviewCanvas.Children.Add(marker);
+                        
+                        txtSelectionMode.Text = $"🎯 {_interactivePoints.Count} nokta seçildi";
+                    }
+                }
+                e.Handled = true;
+                return;
+            }
+            
+            // Renk örnekleme modu
             if (!_sampleColorMode || string.IsNullOrWhiteSpace(Vm.ImagePath) || !File.Exists(Vm.ImagePath))
                 return;
 
-            var point = e.GetPosition(PreviewCanvas);
+            var clickPoint = e.GetPosition(PreviewCanvas);
             using (var bitmap = new Bitmap(Vm.ImagePath))
             {
-                var x = Math.Max(0, Math.Min(bitmap.Width - 1, (int)(point.X / PreviewCanvas.Width * bitmap.Width)));
-                var y = Math.Max(0, Math.Min(bitmap.Height - 1, (int)(point.Y / PreviewCanvas.Height * bitmap.Height)));
+                var x = Math.Max(0, Math.Min(bitmap.Width - 1, (int)(clickPoint.X / PreviewCanvas.Width * bitmap.Width)));
+                var y = Math.Max(0, Math.Min(bitmap.Height - 1, (int)(clickPoint.Y / PreviewCanvas.Height * bitmap.Height)));
                 var color = bitmap.GetPixel(x, y);
                 var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-                if (!Vm.CustomPaletteHex.Contains(hex))
+                
+                // Hariç tutma modunda
+                if (_excludeSelectedMode)
                 {
-                    Vm.CustomPaletteHex.Add(hex);
-                    cmbPalette.Items.Add(new ListBoxItem
+                    // Bu rengi paletten çıkar
+                    for (int i = cmbPalette.Items.Count - 1; i >= 0; i--)
                     {
-                        Content = new CheckBox { Content = hex, IsChecked = true }
-                    });
+                        var item = cmbPalette.Items[i] as ListBoxItem;
+                        var checkBox = item?.Content as CheckBox;
+                        if (checkBox != null && checkBox.Content.ToString().Contains(hex))
+                        {
+                            cmbPalette.Items.RemoveAt(i);
+                            break;
+                        }
+                    }
+                    txtStatus.Text = $"Renk hariç tutuldu: {hex}";
+                }
+                else
+                {
+                    // Normal renk ekleme modu
+                    if (!Vm.CustomPaletteHex.Contains(hex))
+                    {
+                        Vm.CustomPaletteHex.Add(hex);
+                        cmbPalette.Items.Add(new ListBoxItem
+                        {
+                            Content = new CheckBox { Content = hex, IsChecked = true }
+                        });
+                    }
+                    txtStatus.Text = $"Renk eklendi: {hex}";
                 }
             }
             _sampleColorMode = false;
-            txtStatus.Text = "Fotoğraftan renk eklendi. Yeni önizleme için tekrar Önizleme'ye basın.";
+            _excludeSelectedMode = false;
             e.Handled = true;
         }
 
@@ -450,91 +509,6 @@ namespace StoneMaster.Corel.Docker
             _invertSelection = false;
             txtSelectionMode.Text = "🎯 Mod: Alan Seçimi Aktif - Önizlemede noktalara tıklayın";
             txtStatus.Text = "Önizleme üzerinde desenin içini doldurmak istediğiniz alanlara tıklayın. Bitirince 'ÖNİZLEME OLUŞTUR'a basın.";
-        }
-
-        private void PreviewCanvas_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            // İnteraktif alan seçimi modu
-            if (_interactiveSelectionMode)
-            {
-                var point = e.GetPosition(PreviewCanvas);
-                // Preview canvas koordinatlarını orijinal görsel koordinatlarına çevir
-                if (Vm.LastResponse != null && !string.IsNullOrWhiteSpace(Vm.ImagePath))
-                {
-                    using (var bitmap = new Bitmap(Vm.ImagePath))
-                    {
-                        var imgX = (int)(point.X / PreviewCanvas.Width * bitmap.Width);
-                        var imgY = (int)(point.Y / PreviewCanvas.Height * bitmap.Height);
-                        imgX = Math.Max(0, Math.Min(bitmap.Width - 1, imgX));
-                        imgY = Math.Max(0, Math.Min(bitmap.Height - 1, imgY));
-                        
-                        _interactivePoints.Add((imgX, imgY));
-                        
-                        // Görsel geri bildirim - küçük bir daire çiz
-                        var marker = new Ellipse
-                        {
-                            Width = 8,
-                            Height = 8,
-                            Fill = System.Windows.Media.Brushes.Red,
-                            Stroke = System.Windows.Media.Brushes.White,
-                            StrokeThickness = 1
-                        };
-                        Canvas.SetLeft(marker, point.X - 4);
-                        Canvas.SetTop(marker, point.Y - 4);
-                        PreviewCanvas.Children.Add(marker);
-                        
-                        txtSelectionMode.Text = $"🎯 {_interactivePoints.Count} nokta seçildi";
-                    }
-                }
-                e.Handled = true;
-                return;
-            }
-            
-            // Renk örnekleme modu
-            if (!_sampleColorMode || string.IsNullOrWhiteSpace(Vm.ImagePath) || !File.Exists(Vm.ImagePath))
-                return;
-
-            var clickPoint = e.GetPosition(PreviewCanvas);
-            using (var bitmap = new Bitmap(Vm.ImagePath))
-            {
-                var x = Math.Max(0, Math.Min(bitmap.Width - 1, (int)(clickPoint.X / PreviewCanvas.Width * bitmap.Width)));
-                var y = Math.Max(0, Math.Min(bitmap.Height - 1, (int)(clickPoint.Y / PreviewCanvas.Height * bitmap.Height)));
-                var color = bitmap.GetPixel(x, y);
-                var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-                
-                // Hariç tutma modunda
-                if (_excludeSelectedMode)
-                {
-                    // Bu rengi paletten çıkar
-                    for (int i = cmbPalette.Items.Count - 1; i >= 0; i--)
-                    {
-                        var item = cmbPalette.Items[i] as ListBoxItem;
-                        var checkBox = item?.Content as CheckBox;
-                        if (checkBox != null && checkBox.Content.ToString().Contains(hex))
-                        {
-                            cmbPalette.Items.RemoveAt(i);
-                            break;
-                        }
-                    }
-                    txtStatus.Text = $"Renk hariç tutuldu: {hex}";
-                }
-                else
-                {
-                    // Normal renk ekleme modu
-                    if (!Vm.CustomPaletteHex.Contains(hex))
-                    {
-                        Vm.CustomPaletteHex.Add(hex);
-                        cmbPalette.Items.Add(new ListBoxItem
-                        {
-                            Content = new CheckBox { Content = hex, IsChecked = true }
-                        });
-                    }
-                    txtStatus.Text = $"Renk eklendi: {hex}";
-                }
-            }
-            _sampleColorMode = false;
-            _excludeSelectedMode = false;
-            e.Handled = true;
         }
 
         // SelectEdges_Click fonksiyonu kaldırıldı - edge_only checkbox'ı doğrudan kullanılabilir
