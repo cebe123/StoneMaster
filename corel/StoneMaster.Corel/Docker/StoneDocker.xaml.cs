@@ -96,11 +96,16 @@ namespace StoneMaster.Corel.Docker
                 RenderPreview(response);
                 _previewEdited = false;
                 SetProgress(100, "Tamamlandı");
-                txtStatus.Text = $"TAŞ: {response.stone_count:N0}\nMALİYET: {response.total_cost_tl:N2} TL\nRENK: {response.used_colors}";
+                
+                // Durum bilgisi güncelle
+                txtStoneCount.Text = $"🔢 Taş Sayısı: {response.stone_count:N0}";
+                txtCost.Text = $"💰 Tahmini Maliyet: {response.total_cost_tl:N2} TL";
+                txtStatus.Text = $"✅ Hazır: {response.stone_count:N0} taş | {response.total_cost_tl:N2} TL | {response.used_colors} renk";
             }
             catch (Exception ex)
             {
-                txtStatus.Text = ex.Message;
+                txtStatus.Text = "❌ Hata: " + ex.Message;
+                MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -114,14 +119,25 @@ namespace StoneMaster.Corel.Docker
                 if (response == null || !_previewEdited)
                     response = await Vm.PreviewAsync(new Progress<string>(UpdateProgress));
                 response = FilterResponse(response);
+                
+                // CorelDRAW'a aktar - görsel boyutları doğru şekilde geçiriliyor
                 MainPlugin.Corel.ApplyGeneration(response, Vm.CurrentBitmapContext, renderPreview: true, renderLaser: true, clearPrevious: true);
+                
                 SetProgress(100, "Tamamlandı");
                 txtStoneCount.Text = $"Taş sayısı: {response.stones.Count:N0}";
-                txtStatus.Text = $"Uygulandı: {response.stone_count:N0} taş.";
+                
+                // Maliyet bilgisi güncelle
+                if (Vm.LastResponse != null)
+                {
+                    txtCost.Text = $"💰 Tahmini Maliyet: {Vm.LastResponse.total_cost_tl:N2} TL";
+                }
+                
+                txtStatus.Text = $"✅ Uygulandı: {response.stone_count:N0} taş, {response.total_cost_tl:N2} TL";
             }
             catch (Exception ex)
             {
-                txtStatus.Text = ex.Message;
+                txtStatus.Text = "❌ Hata: " + ex.Message;
+                MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -352,7 +368,11 @@ namespace StoneMaster.Corel.Docker
             if (Vm.StoneSizes.Count == 0)
                 throw new InvalidOperationException("En az bir taş boyutunu işaretleyin.");
             Vm.PaletteColors = GetCheckedValues(cmbPalette);
-            Vm.BackgroundMode = ((System.Windows.Controls.ComboBoxItem)cmbBackgroundMode.SelectedItem).Content.ToString();
+            
+            // Arka plan modu - ComboBox'tan seçilen metni al
+            var bgModeItem = cmbBackgroundMode.SelectedItem as System.Windows.Controls.ComboBoxItem;
+            Vm.BackgroundMode = bgModeItem?.Content?.ToString() ?? "AUTO";
+            
             Vm.BackgroundTolerance = double.Parse(txtBackgroundTolerance.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.BackgroundColor = txtBackgroundColor.Text;
             Vm.Gap = double.Parse(txtGap.Text, System.Globalization.CultureInfo.InvariantCulture);
@@ -365,14 +385,18 @@ namespace StoneMaster.Corel.Docker
             Vm.FabricHeightMm = string.IsNullOrWhiteSpace(txtHeight.Text)
                 ? (double?)null
                 : double.Parse(txtHeight.Text, System.Globalization.CultureInfo.InvariantCulture);
-            Vm.Mode = ((System.Windows.Controls.ComboBoxItem)cmbMode.SelectedItem).Content.ToString();
+            
+            // Mod seçimi - ComboBox'tan seçilen metni al ve ilk kelimeyi kullan (FULL, EDGE, vb.)
+            var modeItem = cmbMode.SelectedItem as System.Windows.Controls.ComboBoxItem;
+            string modeText = modeItem?.Content?.ToString() ?? "FULL";
+            Vm.Mode = modeText.Split(' ')[0]; // İlk kelimeyi al (FULL, EDGE, FILL, SCATTER, BUDGET)
+            
             Vm.BudgetTl = double.Parse(txtBudget.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.StoneUnitPriceTl = string.IsNullOrWhiteSpace(txtStoneUnitPrice.Text)
                 ? (double?)null
                 : double.Parse(txtStoneUnitPrice.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.Sprinkle = chkSprinkle.IsChecked.GetValueOrDefault();
-            Vm.EdgeOnly = chkEdgeOnly.IsChecked.GetValueOrDefault();
-            // EdgeThreshold artık kullanılmıyor, varsayılan değer verelim
+            Vm.EdgeOnly = false; // Artık kullanılmıyor, mode ile kontrol ediliyor
             Vm.EdgeThreshold = 80;
         }
 

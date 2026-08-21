@@ -108,17 +108,31 @@ namespace StoneMaster.Corel.UI
         {
             // Stil belirleme: Mode parametresini style olarak kullan
             // FULL -> balanced, EDGE -> edge, FILL -> fill, SCATTER -> scatter
+            // ÖNEMLİ: edge_only checkbox'ı kaldırıldı, sadece mode kullanılıyor
             string style = "balanced";
-            if (EdgeOnly)
+            string modeUpper = (Mode ?? "FULL").ToUpper();
+            
+            if (modeUpper == "EDGE")
                 style = "edge";
-            else if (Sprinkle)
-                style = "scatter";
-            else if (string.Equals(Mode, "FILL", StringComparison.OrdinalIgnoreCase))
+            else if (modeUpper == "FILL")
                 style = "fill";
-            else if (string.Equals(Mode, "EDGE", StringComparison.OrdinalIgnoreCase))
-                style = "edge";
-            else if (string.Equals(Mode, "SCATTER", StringComparison.OrdinalIgnoreCase))
+            else if (modeUpper == "SCATTER" || Sprinkle)
                 style = "scatter";
+            else if (modeUpper == "BUDGET")
+                style = "balanced"; // Bütçe modu balanced stil ile çalışır
+            else
+                style = "balanced"; // FULL varsayılan
+            
+            // Otomatik yoğunluk ayarı (mod bazlı)
+            double autoDensity = Density;
+            if (modeUpper == "FULL")
+                autoDensity = Math.Max(Density, 0.7); // Tam doldurma için yüksek yoğunluk
+            else if (modeUpper == "EDGE")
+                autoDensity = Math.Min(Density, 0.5); // Kenar için düşük yoğunluk
+            else if (modeUpper == "FILL")
+                autoDensity = Math.Max(Density, 0.6); // İç doldurma için orta-yüksek yoğunluk
+            else if (modeUpper == "SCATTER")
+                autoDensity = Math.Min(Density, 0.4); // Serpme için düşük yoğunluk
             
             return new EngineRequest
             {
@@ -130,7 +144,7 @@ namespace StoneMaster.Corel.UI
                 palette_colors = PaletteColors,
                 gap_mm = Gap,
                 laser_tolerance_mm = LaserTolerance,
-                density = Density,
+                density = autoDensity,
                 background_threshold = BackgroundThreshold,
                 background_mode = BackgroundMode,
                 background_tolerance = BackgroundTolerance,
@@ -138,18 +152,18 @@ namespace StoneMaster.Corel.UI
                 edge_sensitivity = EdgeSensitivity,
                 detail_sensitivity = DetailSensitivity,
                 mode = Mode,
-                style = style,  // Yeni style parametresi
+                style = style,
                 calculate_cost = true,
-                budget_enabled = string.Equals(Mode, "BUDGET", StringComparison.OrdinalIgnoreCase),
+                budget_enabled = modeUpper == "BUDGET",
                 target_budget_tl = BudgetTl,
                 stone_unit_price_tl = StoneUnitPriceTl,
-                exclusion_rect = ExclusionRect
-                ,custom_palette_hex = CustomPaletteHex,
+                exclusion_rect = ExclusionRect,
+                custom_palette_hex = CustomPaletteHex,
                 sprinkle = Sprinkle,
                 exclude_dark_stones = ExcludeDarkStones,
                 dark_stone_threshold = DarkStoneThreshold,
-                excluded_stone_groups = ExcludedStoneGroups
-                ,edge_only = EdgeOnly,
+                excluded_stone_groups = ExcludedStoneGroups,
+                edge_only = false, // Artık kullanılmıyor, mode ile kontrol ediliyor
                 edge_threshold = EdgeThreshold
             };
         }
