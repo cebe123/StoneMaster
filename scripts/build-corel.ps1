@@ -1,6 +1,6 @@
 param(
     [string]$CorelInteropPath = "",
-    [switch]$SkipEngineBuild = $false
+    [switch]$SkipRestore = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,15 +11,7 @@ function Write-Step {
     Write-Host "`n=== $Message ===" -ForegroundColor $Color
 }
 
-Write-Step "StoneMaster Build Süreci Başlatılıyor"
-
-# Engine build (isteğe bağlı olarak atlanabilir)
-if (-not $SkipEngineBuild) {
-    Write-Step "Engine Bileşenleri Derleniyor"
-    & "$PSScriptRoot\build-engine.ps1"
-} else {
-    Write-Step "Engine Build Atlandı" -Color Yellow
-}
+Write-Step "StoneMaster Corel Add-on Derlemesi Başlatılıyor"
 
 # CorelInteropPath kontrolü
 if ([string]::IsNullOrEmpty($CorelInteropPath)) {
@@ -44,8 +36,7 @@ if ([string]::IsNullOrEmpty($CorelInteropPath)) {
         Write-Host "`nHATA: Corel.Interop.VGCore.dll bulunamadı." -ForegroundColor Red
         Write-Host "Lütfen şunlardan birini yapın:" -ForegroundColor Yellow
         Write-Host "  1. CorelDRAW'ı yükleyin" -ForegroundColor Yellow
-        Write-Host "  2. Dosyanın yolunu belirtin: .\build.ps1 -CorelInteropPath 'C:\path\to\Corel.Interop.VGCore.dll'" -ForegroundColor Yellow
-        Write-Host "  3. Veya sadece engine'i derleyin: .\build.ps1 -SkipEngineBuild" -ForegroundColor Yellow
+        Write-Host "  2. Dosyanın yolunu belirtin: .\build-corel.ps1 -CorelInteropPath 'C:\path\to\Corel.Interop.VGCore.dll'" -ForegroundColor Yellow
         throw "Corel.Interop.VGCore.dll bulunamadı"
     }
 } elseif (-not (Test-Path -LiteralPath $CorelInteropPath -PathType Leaf)) {
@@ -64,23 +55,41 @@ Write-Step "Corel Add-on Derleniyor"
 $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
 $buildSuccess = $false
 
+$restoreFlag = ""
+if ($SkipRestore) {
+    $restoreFlag = "/p:RestorePackages=false"
+    Write-Host "Paket geri yükleme atlandı." -ForegroundColor Yellow
+}
+
 if ($null -ne $dotnetCommand) {
     Write-Host "dotnet MSBuild kullanılıyor..." -ForegroundColor Gray
-    & $dotnetCommand.Source msbuild $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+    if ($SkipRestore) {
+        & $dotnetCommand.Source msbuild $solution /t:Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" $restoreFlag /v:minimal
+    } else {
+        & $dotnetCommand.Source msbuild $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+    }
     $buildSuccess = ($LASTEXITCODE -eq 0)
 }
 else {
     $msbuildCommand = Get-Command msbuild -ErrorAction SilentlyContinue
     if ($null -ne $msbuildCommand) {
         Write-Host "MSBuild kullanılıyor..." -ForegroundColor Gray
-        & $msbuildCommand.Source $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+        if ($SkipRestore) {
+            & $msbuildCommand.Source $solution /t:Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" $restoreFlag /v:minimal
+        } else {
+            & $msbuildCommand.Source $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+        }
         $buildSuccess = ($LASTEXITCODE -eq 0)
     }
     else {
         $vsBuildToolsMsbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
         if (Test-Path -LiteralPath $vsBuildToolsMsbuild -PathType Leaf) {
             Write-Host "Visual Studio BuildTools MSBuild kullanılıyor..." -ForegroundColor Gray
-            & $vsBuildToolsMsbuild $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+            if ($SkipRestore) {
+                & $vsBuildToolsMsbuild $solution /t:Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" $restoreFlag /v:minimal
+            } else {
+                & $vsBuildToolsMsbuild $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+            }
             $buildSuccess = ($LASTEXITCODE -eq 0)
         }
         else {
@@ -105,7 +114,6 @@ if (-not (Test-Path "$dockerBuildOutput\StoneMaster.Corel.dll")) {
 }
 
 Copy-Item "$dockerBuildOutput\StoneMaster.Corel.dll" "$dockerDest\StoneMaster.Corel.dll" -Force
-Copy-Item "$PSScriptRoot\..\artifacts\StoneMaster.Engine\StoneMaster.Engine.exe" "$dockerDest\StoneMaster.Engine.exe" -Force
 
 # Manifest dosyalarını kopyala
 $manifestPath = "$PSScriptRoot\..\corel\StoneMaster.Corel\Manifest"
@@ -121,6 +129,6 @@ if (Test-Path -LiteralPath "$dockerDest\Corel.Interop.VGCore.dll") {
     Write-Host "Corel.Interop.VGCore.dll artifact'tan kaldırıldı." -ForegroundColor Yellow
 }
 
-Write-Step "Build Başarıyla Tamamlandı!" -Color Green
+Write-Step "Corel Build Başarıyla Tamamlandı!" -Color Green
 Write-Host "Çıktı klasörü: $dockerDest" -ForegroundColor Green
-Write-Host "`nKurulum için: .\scripts\package.ps1" -ForegroundColor Cyan
+Write-Host "`nNot: Engine bileşeni bu script ile derlenmez. Tüm proje için build.ps1 kullanın." -ForegroundColor Cyan
