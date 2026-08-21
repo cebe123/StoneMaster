@@ -33,15 +33,30 @@
                     
                     <CheckBox x:Name="chkEdgeOnly" Content="✏️ Sadece Kenarlara Taş Diz" Margin="0,8,0,4" ToolTip="Kenar algılama sonrası sadece kenar çizgilerine taş yerleştirir"/>
                     <CheckBox x:Name="chkSprinkle" Content="✨ Serpme Modu (Yumuşak Geçişler)" Margin="0,4,0,0" ToolTip="Daha doğal, dağınık görünüm için"/>
+                    <CheckBox x:Name="chkGridSnap" Content="🔲 Grid Hizalama (Satır/Sütun)" Margin="0,4,0,0" ToolTip="Taşları düzenli satır ve sütunlara hizalar"/>
+                    <Button Content="🎯 İnteraktif Alan Seçimi" Click="InteractiveSelect_Click" Margin="0,6,0,0" ToolTip="Önizlemede tıklayarak alan seçin"/>
+                    <TextBlock x:Name="txtSelectionMode" Text="" Margin="0,4,0,0" FontStyle="Italic" Foreground="Green" FontWeight="Bold"/>
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox Header="📏 ÖLÇEKLENDİRME" Margin="0,0,0,8">
+            <GroupBox Header="📏 KALIP / ÇALIŞMA ALANI" Margin="0,0,0,8">
                 <StackPanel Margin="8">
-                    <TextBlock Text="Kumaş Genişliği (mm)" FontWeight="Bold" Margin="0,0,0,2"/>
-                    <TextBox x:Name="txtWidth" Text="1000" ToolTip="Tasarımın gerçek genişliği (mm)"/>
-                    <TextBlock Text="Kumaş Yüksekliği (opsiyonel - boş bırakılırsa otomatik hesaplanır)" Margin="0,6,0,2" FontStyle="Italic" Foreground="Gray"/>
-                    <TextBox x:Name="txtHeight" ToolTip="Boş bırakılırsa görsel oranına göre otomatik hesaplanır"/>
+                    <TextBlock Text="Kalıp Boyutu (Standart Çalışma Alanı):" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <ComboBox x:Name="cmbTemplateSize" SelectedIndex="0" ToolTip="Standart kalıp boyutlarını seçin">
+                        <ComboBoxItem Tag="500,700">50x70 cm (Standart)</ComboBoxItem>
+                        <ComboBoxItem Tag="700,500">70x50 cm (Yatay)</ComboBoxItem>
+                        <ComboBoxItem Tag="600,800">60x80 cm (Büyük)</ComboBoxItem>
+                        <ComboBoxItem Tag="800,600">80x60 cm (Geniş)</ComboBoxItem>
+                        <ComboBoxItem Tag="1000,1000">100x100 cm (Kare)</ComboBoxItem>
+                        <ComboBoxItem Tag="custom">Özel Ölçü</ComboBoxItem>
+                    </ComboBox>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Genişlik (mm):" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="txtWidth" Text="500" Width="80" ToolTip="Çalışma alanı genişliği (mm)"/>
+                        <TextBlock Text="Yükseklik (mm):" Margin="12,0,8,0" VerticalAlignment="Center"/>
+                        <TextBox x:Name="txtHeight" Text="700" Width="80" ToolTip="Çalışma alanı yüksekliği (mm)"/>
+                    </StackPanel>
+                    <TextBlock Text="Görsel otomatik olarak kalıba ölçeklenecek" Margin="0,6,0,0" FontStyle="Italic" Foreground="Gray" FontSize="11"/>
                 </StackPanel>
             </GroupBox>
 
@@ -138,7 +153,8 @@
                     </ScrollViewer>
                 </Border>
             </GroupBox>
-            <TextBlock x:Name="txtStoneCount" Text="🔢 Taş sayısı: 0" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+            <TextBlock x:Name="txtStoneCount" Text="🔢 Taş sayısı: 0" FontWeight="Bold" FontSize="14" Margin="0,0,0,4"/>
+            <TextBlock x:Name="txtCost" Text="💰 Tahmini maliyet: 0.00 TL" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <CheckBox x:Name="chkShowBackground" Content="🖼️ Arka plan fotoğrafını göster" IsChecked="True" Click="BackgroundVisibility_Click" VerticalAlignment="Center"/>

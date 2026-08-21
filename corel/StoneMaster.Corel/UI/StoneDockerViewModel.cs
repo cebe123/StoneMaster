@@ -45,6 +45,8 @@ namespace StoneMaster.Corel.UI
         public List<List<string>> ExcludedStoneGroups { get; } = new List<List<string>>();
         public bool EdgeOnly { get; set; }
         public int EdgeThreshold { get; set; } = 80;
+        public bool GridSnap { get; set; }
+        public List<(int x, int y)> InteractivePoints { get; set; } = new List<(int, int)>();
         public double Gap { get; set; }
         public double Density { get; set; }
         public int BackgroundThreshold { get; set; }
@@ -163,8 +165,10 @@ namespace StoneMaster.Corel.UI
                 exclude_dark_stones = ExcludeDarkStones,
                 dark_stone_threshold = DarkStoneThreshold,
                 excluded_stone_groups = ExcludedStoneGroups,
-                edge_only = false, // Artık kullanılmıyor, mode ile kontrol ediliyor
-                edge_threshold = EdgeThreshold
+                edge_only = EdgeOnly, // Artık checkbox ile kontrol ediliyor
+                edge_threshold = EdgeThreshold,
+                grid_snap = GridSnap,
+                interactive_points = InteractivePoints
             };
         }
 

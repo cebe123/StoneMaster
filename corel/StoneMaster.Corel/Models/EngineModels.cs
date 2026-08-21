@@ -35,6 +35,8 @@ namespace StoneMaster.Corel.Models
         public List<List<string>> excluded_stone_groups { get; set; }
         public bool edge_only { get; set; }
         public int edge_threshold { get; set; } = 80;
+        public bool grid_snap { get; set; }
+        public List<(int x, int y)> interactive_points { get; set; }
         public string style { get; set; } = "balanced";  // balanced, edge, fill, scatter
         public int analysis_max_dimension { get; set; } = 1600;
     }

@@ -163,6 +163,11 @@ class StonePlacementEngine:
         fill_interior = not style.lower() in ["scatter", "edge"]
         weights['fill_interior'] = fill_interior
         
+        # Grid snap ve interactive_mask parametrelerini ekle
+        # Not: interactive_mask şu an None, gelecekte kullanıcı etkileşimi ile doldurulabilir
+        weights['grid_snap'] = False  # Varsayılan olarak kapalı
+        weights['interactive_mask'] = None
+        
         # Aday noktaları oluştur
         selected_stones = [self.stones[size] for size in stone_sizes]
         selected_colors = [c for c in self.palette if c.name in colors]
