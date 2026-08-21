@@ -16,6 +16,7 @@ def test_basic_generation():
         tas_boyutu="SS10",
         yogunluk=0.5,
         arka_plan_esigi=245,
+        palet_renkleri=["Crystal", "Black"],
     )
     assert result["success"] is True
     assert result["stone_count"] > 0
