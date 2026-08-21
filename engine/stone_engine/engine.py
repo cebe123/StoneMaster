@@ -135,7 +135,7 @@ class StonePlacementEngine:
             fabric_height_mm = orig_h * (fabric_width_mm / orig_w)
         
         # Görsel boyutunu optimize et
-        image, _ = fit_max_dimension(image, max_dim=1600)
+        image, _ = fit_max_dimension(image, 1600)
         progress(20, "Görsel optimize edildi")
         
         # Arka plan maskesi
@@ -155,8 +155,13 @@ class StonePlacementEngine:
         edges = edge_map(image, sensitivity=0.5)
         progress(50, "Kenarlar tespit edildi")
         
-        # Stil bazlı ağırlıklar
+        # Stil bazlı ağırlıklar ve fill_interior parametresi
         weights = self._get_style_weights(style)
+        
+        # fill_interior: serpme (sprinkle) ve sadece kenar (edge_only) hariç tüm modlarda iç alanı doldur
+        # Bu sayede seçili kenarların DIŞI değil İÇİ doldurulur
+        fill_interior = not style.lower() in ["scatter", "edge"]
+        weights['fill_interior'] = fill_interior
         
         # Aday noktaları oluştur
         selected_stones = [self.stones[size] for size in stone_sizes]

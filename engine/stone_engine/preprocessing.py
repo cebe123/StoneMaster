@@ -40,3 +40,57 @@ def background_mask(image, threshold=245, mode="LIGHT", tolerance=28, color="#F5
     if mode == "DARK":
         return lum >= threshold
     return lum < threshold
+
+
+def interior_mask(edge_map_image, valid_mask=None):
+    """
+    Kenar haritasından iç alan maskesi oluşturur.
+    Kenarları kapalı bölgelere dönüştürür ve içini doldurur.
+    
+    Args:
+        edge_map_image: Kenar haritası (0-255 grayscale veya boolean)
+        valid_mask: Opsiyonel geçerli alan maskesi
+        
+    Returns:
+        Boolean numpy array: İç alan True, dış alan False
+    """
+    # Kenar haritasını binary yap
+    if edge_map_image.dtype == bool:
+        edges = edge_map_image.astype(np.uint8) * 255
+    else:
+        edges = (edge_map_image > 0).astype(np.uint8) * 255
+    
+    # Morfolojik işlemlerle kenarları kalınlaştır (boşlukları kapat)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    edges_dilated = cv2.dilate(edges, kernel, iterations=2)
+    edges_closed = cv2.erode(edges_dilated, kernel, iterations=1)
+    
+    # Tüm beyaz kenarları birleştir
+    contours, _ = cv2.findContours(edges_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Boş canvas oluştur
+    h, w = edges.shape[:2]
+    filled = np.zeros((h, w), dtype=np.uint8)
+    
+    # Her konturun içini doldur
+    for contour in contours:
+        if cv2.contourArea(contour) > 50:  # Çok küçük konturları atla
+            # Konturu kapat
+            epsilon = 0.02 * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
+            
+            # İçini doldur
+            cv2.drawContours(filled, [approx], -1, 255, thickness=cv2.FILLED)
+    
+    # Kenar piksellerini de dahil et (kenar çizgileri üzerinde de taş olsun)
+    edges_bool = edges > 0
+    filled_bool = filled > 0
+    
+    # Kenarları ve iç alanı birleştir
+    result = np.logical_or(edges_bool, filled_bool)
+    
+    # Valid mask varsa uygula
+    if valid_mask is not None:
+        result = np.logical_and(result, valid_mask)
+    
+    return result

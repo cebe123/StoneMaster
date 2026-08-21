@@ -372,7 +372,8 @@ namespace StoneMaster.Corel.Docker
                 : double.Parse(txtStoneUnitPrice.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.Sprinkle = chkSprinkle.IsChecked.GetValueOrDefault();
             Vm.EdgeOnly = chkEdgeOnly.IsChecked.GetValueOrDefault();
-            Vm.EdgeThreshold = (int)sldEdgeThreshold.Value;
+            // EdgeThreshold artık kullanılmıyor, varsayılan değer verelim
+            Vm.EdgeThreshold = 80;
         }
 
         private void ExcludeColor_Click(object sender, RoutedEventArgs e)
@@ -381,11 +382,7 @@ namespace StoneMaster.Corel.Docker
             txtStatus.Text = "Hariç tutulacak rengi seçmek için önizlemede fotoğrafın üzerine tıklayın.";
         }
 
-        private void SelectEdges_Click(object sender, RoutedEventArgs e)
-        {
-            chkEdgeOnly.IsChecked = true;
-            txtStatus.Text = "Kenar dizimi etkin. Eşik değerini ayarlayıp Önizleme'ye basın.";
-        }
+        // SelectEdges_Click fonksiyonu kaldırıldı - edge_only checkbox'ı doğrudan kullanılabilir
 
         private static List<string> GetCheckedValues(ListBox list)
         {
