@@ -29,10 +29,7 @@ if ([string]::IsNullOrEmpty($CorelInteropPath)) {
         "C:\Program Files (x86)\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll",
         "C:\Program Files\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll",
         "${env:ProgramFiles}\Corel\CorelDRAW Graphics Suite 2024\Programs64\Corel.Interop.VGCore.dll",
-        "${env:ProgramFiles(x86)}\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll",
-        "$env:USERPROFILE\Desktop\Corel.Interop.VGCore.dll",
-        "$env:USERPROFILE\OneDrive\Desktop\Corel.Interop.VGCore.dll",
-        "$env:USERPROFILE\OneDrive\Masaüstü\Corel.Interop.VGCore.dll"
+        "${env:ProgramFiles(x86)}\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll"
     )
     
     foreach ($path in $defaultPaths) {
@@ -49,8 +46,6 @@ if ([string]::IsNullOrEmpty($CorelInteropPath)) {
         Write-Host "  1. CorelDRAW'ı yükleyin" -ForegroundColor Yellow
         Write-Host "  2. Dosyanın yolunu belirtin: .\build.ps1 -CorelInteropPath 'C:\path\to\Corel.Interop.VGCore.dll'" -ForegroundColor Yellow
         Write-Host "  3. Veya sadece engine'i derleyin: .\build.ps1 -SkipEngineBuild" -ForegroundColor Yellow
-        Write-Host "`nÖrnek kullanım:" -ForegroundColor Cyan
-        Write-Host "  .\scripts\build.ps1 -CorelInteropPath 'C:\Users\adnan\OneDrive\Masaüstü\Corel.Interop.VGCore.dll'" -ForegroundColor White
         throw "Corel.Interop.VGCore.dll bulunamadı"
     }
 } elseif (-not (Test-Path -LiteralPath $CorelInteropPath -PathType Leaf)) {
