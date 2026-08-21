@@ -23,20 +23,50 @@ if (-not $SkipEngineBuild) {
 
 # CorelInteropPath kontrolü
 if ([string]::IsNullOrEmpty($CorelInteropPath)) {
-    # Varsayılan yolları dene
-    $defaultPaths = @(
+    Write-Host "`n[BİLGİ] Corel.Interop.VGCore.dll aranıyor..." -ForegroundColor Cyan
+    
+    # Önce bilinen konumlara bak
+    $knownPaths = @(
+        "C:\Program Files\Corel\CorelDRAW Graphics Suite\26\Programs64\Corel.Interop.VGCore.dll",
         "C:\Program Files\Corel\CorelDRAW Graphics Suite 2024\Programs64\Corel.Interop.VGCore.dll",
         "C:\Program Files (x86)\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll",
         "C:\Program Files\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll",
-        "${env:ProgramFiles}\Corel\CorelDRAW Graphics Suite 2024\Programs64\Corel.Interop.VGCore.dll",
-        "${env:ProgramFiles(x86)}\Corel\CorelDRAW Graphics Suite 2023\Programs64\Corel.Interop.VGCore.dll"
+        "${env:USERPROFILE}\Desktop\Corel.Interop.VGCore.dll",
+        "${env:USERPROFILE}\OneDrive\Desktop\Corel.Interop.VGCore.dll",
+        "${env:USERPROFILE}\OneDrive\Masaüstü\Corel.Interop.VGCore.dll"
     )
     
-    foreach ($path in $defaultPaths) {
+    foreach ($path in $knownPaths) {
         if (Test-Path -LiteralPath $path -PathType Leaf) {
             $CorelInteropPath = $path
-            Write-Host "Corel.Interop.VGCore.dll bulundu: $CorelInteropPath" -ForegroundColor Green
+            Write-Host "[BULUNDU] Standart yolda tespit edildi: $CorelInteropPath" -ForegroundColor Green
             break
+        }
+    }
+    
+    # Eğer bulunamadıysa tüm sistemde recursive arama yap
+    if ([string]::IsNullOrEmpty($CorelInteropPath)) {
+        Write-Host "[BİLGİ] Bilinen konumlarda bulunamadı. Tüm disklerde aranıyor..." -ForegroundColor Yellow
+        
+        $drives = Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Root
+        
+        foreach ($drive in $drives) {
+            Write-Host "  Aranıyor: $drive" -ForegroundColor Gray
+            try {
+                $foundFile = Get-ChildItem -Path $drive -Filter "Corel.Interop.VGCore.dll" -Recurse -ErrorAction SilentlyContinue -File | 
+                    Where-Object { $_.FullName -notmatch '\\Recycle\\.Bin|\\\$Recycle\\.Bin|\\System Volume Information' } |
+                    Select-Object -First 1 -ExpandProperty FullName
+                
+                if ($foundFile) {
+                    $CorelInteropPath = $foundFile
+                    Write-Host "[BULUNDU] DLL Tespit Edildi: $CorelInteropPath" -ForegroundColor Green
+                    break
+                }
+            }
+            catch {
+                Write-Host "  Hata (atlanıyor): $_" -ForegroundColor DarkGray
+                continue
+            }
         }
     }
     
@@ -52,35 +82,52 @@ if ([string]::IsNullOrEmpty($CorelInteropPath)) {
     throw "Belirtilen Corel.Interop.VGCore.dll bulunamadı: $CorelInteropPath"
 }
 
-# Corel Add-on build
-$solution = "$PSScriptRoot\..\corel\StoneMaster.Corel\StoneMaster.Corel.csproj"
+# DLL'yi proje klasörüne kopyala
+$dllDestDir = "$PSScriptRoot\..\build"
+New-Item -ItemType Directory -Force -Path $dllDestDir | Out-Null
+$dllDest = "$dllDestDir\Corel.Interop.VGCore.dll"
 
-if (-not (Test-Path $solution)) {
-    throw "Corel solution dosyası bulunamadı: $solution"
+if ($CorelInteropPath -ne $dllDest) {
+    Copy-Item -LiteralPath $CorelInteropPath -Destination $dllDest -Force
+    Write-Host "[KOPYALANDI] DLL dosyası proje klasörüne kopyalandı: $dllDest" -ForegroundColor Green
 }
 
-Write-Step "Corel Add-on Derleniyor"
+# Corel Add-on build - .csproj dosyasını doğrudan kullan
+$project = "$PSScriptRoot\..\corel\StoneMaster.Corel\StoneMaster.Corel.csproj"
+
+if (-not (Test-Path $project)) {
+    # Eğer .csproj bulunamazsa solution dosyasını dene
+    $solution = "$PSScriptRoot\..\StoneMaster.sln"
+    if (Test-Path $solution) {
+        Write-Host "Proje dosyası bulunamadı, solution dosyası kullanılıyor: $solution" -ForegroundColor Yellow
+        $project = $solution
+    } else {
+        throw "Ne proje (.csproj) ne de solution (.sln) dosyası bulunamadı!"
+    }
+}
+
+Write-Step "Corel Add-on Derleniyor ($project)"
 
 $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
 $buildSuccess = $false
 
 if ($null -ne $dotnetCommand) {
     Write-Host "dotnet MSBuild kullanılıyor..." -ForegroundColor Gray
-    & $dotnetCommand.Source msbuild $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+    & $dotnetCommand.Source msbuild $project /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
     $buildSuccess = ($LASTEXITCODE -eq 0)
 }
 else {
     $msbuildCommand = Get-Command msbuild -ErrorAction SilentlyContinue
     if ($null -ne $msbuildCommand) {
         Write-Host "MSBuild kullanılıyor..." -ForegroundColor Gray
-        & $msbuildCommand.Source $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+        & $msbuildCommand.Source $project /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
         $buildSuccess = ($LASTEXITCODE -eq 0)
     }
     else {
         $vsBuildToolsMsbuild = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
         if (Test-Path -LiteralPath $vsBuildToolsMsbuild -PathType Leaf) {
             Write-Host "Visual Studio BuildTools MSBuild kullanılıyor..." -ForegroundColor Gray
-            & $vsBuildToolsMsbuild $solution /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
+            & $vsBuildToolsMsbuild $project /t:Restore,Build /p:Configuration=Release /p:Platform=x64 "/p:CorelInteropPath=$CorelInteropPath" /v:minimal
             $buildSuccess = ($LASTEXITCODE -eq 0)
         }
         else {
@@ -101,11 +148,37 @@ New-Item -ItemType Directory -Force -Path $dockerDest | Out-Null
 $dockerBuildOutput = "$PSScriptRoot\..\corel\StoneMaster.Corel\bin\x64\Release\net48"
 
 if (-not (Test-Path "$dockerBuildOutput\StoneMaster.Corel.dll")) {
-    throw "Derleme çıktısı bulunamadı: $dockerBuildOutput\StoneMaster.Corel.dll"
+    # Alternatif çıktı yollarını kontrol et
+    $altPaths = @(
+        "$PSScriptRoot\..\corel\StoneMaster.Corel\bin\Release\net48",
+        "$PSScriptRoot\..\corel\StoneMaster.Corel\bin\x64\Release",
+        "$PSScriptRoot\..\corel\StoneMaster.Corel\obj\x64\Release\net48"
+    )
+    
+    $found = $false
+    foreach ($altPath in $altPaths) {
+        if (Test-Path "$altPath\StoneMaster.Corel.dll") {
+            $dockerBuildOutput = $altPath
+            $found = $true
+            Write-Host "Alternatif çıktı yolu kullanılıyor: $dockerBuildOutput" -ForegroundColor Yellow
+            break
+        }
+    }
+    
+    if (-not $found) {
+        throw "Derleme çıktısı bulunamadı: $dockerBuildOutput\StoneMaster.Corel.dll"
+    }
 }
 
 Copy-Item "$dockerBuildOutput\StoneMaster.Corel.dll" "$dockerDest\StoneMaster.Corel.dll" -Force
-Copy-Item "$PSScriptRoot\..\artifacts\StoneMaster.Engine\StoneMaster.Engine.exe" "$dockerDest\StoneMaster.Engine.exe" -Force
+
+# Engine exe'sini kopyala (eğer varsa)
+$engineExe = "$PSScriptRoot\..\artifacts\StoneMaster.Engine\StoneMaster.Engine.exe"
+if (Test-Path $engineExe) {
+    Copy-Item $engineExe "$dockerDest\StoneMaster.Engine.exe" -Force
+} else {
+    Write-Host "Engine exe bulunamadı, atlanıyor." -ForegroundColor Yellow
+}
 
 # Manifest dosyalarını kopyala
 $manifestPath = "$PSScriptRoot\..\corel\StoneMaster.Corel\Manifest"
@@ -113,6 +186,8 @@ if (Test-Path $manifestPath) {
     Copy-Item "$manifestPath\AppUI.xslt" "$dockerDest\AppUI.xslt" -Force -ErrorAction SilentlyContinue
     Copy-Item "$manifestPath\UserUI.xslt" "$dockerDest\UserUI.xslt" -Force -ErrorAction SilentlyContinue
     Copy-Item "$manifestPath\Coreldrw.addon" "$dockerDest\Coreldrw.addon" -Force -ErrorAction SilentlyContinue
+} else {
+    Write-Host "Manifest klasörü bulunamadı, manuel kopyalama gerekebilir." -ForegroundColor Yellow
 }
 
 # Corel.Interop.VGCore.dll artifact'ta olmamalı
@@ -121,6 +196,29 @@ if (Test-Path -LiteralPath "$dockerDest\Corel.Interop.VGCore.dll") {
     Write-Host "Corel.Interop.VGCore.dll artifact'tan kaldırıldı." -ForegroundColor Yellow
 }
 
+# Corel Plugins klasörüne otomatik kopyalama dene
+$corelPluginDir = "C:\ProgramData\Corel\Plugins\GVAS\StoneMaster"
+try {
+    if (Test-Path "C:\ProgramData\Corel\Plugins\GVAS") {
+        New-Item -ItemType Directory -Force -Path $corelPluginDir | Out-Null
+        Get-ChildItem -Path $dockerDest -File | ForEach-Object {
+            Copy-Item $_.FullName "$corelPluginDir\$($_.Name)" -Force
+        }
+        Write-Host "[KURULDU] Eklenti Corel Plugins klasörüne kopyalandı: $corelPluginDir" -ForegroundColor Green
+    } else {
+        Write-Host "Corel Plugins klasörü bulunamadı. Dosyaları manuel olarak kopyalamanız gerekebilir." -ForegroundColor Yellow
+        Write-Host "Hedef: $corelPluginDir" -ForegroundColor Cyan
+    }
+}
+catch {
+    Write-Host "Corel Plugins klasörüne kopyalama başarısız. Yönetici yetkisi gerekebilir." -ForegroundColor Red
+    Write-Host "Dosyaları manuel olarak kopyalayın: $dockerDest -> $corelPluginDir" -ForegroundColor Yellow
+}
+
 Write-Step "Build Başarıyla Tamamlandı!" -Color Green
 Write-Host "Çıktı klasörü: $dockerDest" -ForegroundColor Green
-Write-Host "`nKurulum için: .\scripts\package.ps1" -ForegroundColor Cyan
+if (Test-Path $corelPluginDir) {
+    Write-Host "Eklenti otomatik olarak Corel'e yüklendi!" -ForegroundColor Green
+} else {
+    Write-Host "`nKurulum için: .\scripts\package.ps1 veya dosyaları manuel kopyalayın." -ForegroundColor Cyan
+}
