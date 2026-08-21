@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^dotnet msbuild 'C:\\\\Users\\\\adnan\\\\Downloads\\\\StoneMaster_Source\\\\StoneMaster\\\\corel\\\\StoneMaster\\.Corel\\\\StoneMaster\\.Corel\\.csproj' /t:Build /p:Configuration=Release /p:Platform=x64 /p:CorelInteropPath='C:\\\\Users\\\\adnan\\\\OneDrive\\\\Masaüstü\\\\Corel\\.Interop\\.VGCore\\.dll'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^& 'C:\\\\Users\\\\adnan\\\\Downloads\\\\StoneMaster_Source\\\\StoneMaster\\\\scripts\\\\package\\.ps1' -CorelInteropPath 'C:\\\\Users\\\\adnan\\\\OneDrive\\\\Masaüstü\\\\Corel\\.Interop\\.VGCore\\.dll'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

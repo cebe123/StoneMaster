@@ -1,0 +1,10 @@
+{
+  "version": "0.2.1",
+  "tasks": [
+    {
+      "taskLabel": "görev-StoneMaster.Corel",
+      "appliesTo": "StoneMaster.Corel.csproj",
+      "type": "msbuild"
+    }
+  ]
+}

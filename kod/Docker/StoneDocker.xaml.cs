@@ -1,0 +1,399 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using StoneMaster.Corel.UI;
+
+namespace StoneMaster.Corel.Docker
+{
+    public partial class StoneDocker
+    {
+        private readonly HashSet<int> _selectedStoneIndexes = new HashSet<int>();
+        private bool _sampleColorMode;
+        private bool _excludeSelectedMode;
+        private bool _previewEdited;
+        private StoneDockerViewModel Vm => (StoneDockerViewModel)DataContext;
+
+        private void OpenFloatingWindow_Click(object sender, RoutedEventArgs e)
+        {
+            StoneFloatingWindow.Open(MainPlugin.Corel.Application);
+        }
+
+        private void UseSelected_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var ctx = MainPlugin.Corel.GetSelectedBitmapContext();
+                Vm.SetImagePath(ctx.ImagePath);
+                txtImage.Text = "CorelDRAW bitmap (seçili)";
+                txtStatus.Text = "CorelDRAW bitmap seçildi.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ExcludeSelectedArea_Click(object sender, RoutedEventArgs e)
+        {
+            _excludeSelectedMode = true;
+            _selectedStoneIndexes.Clear();
+            txtStatus.Text = "Önizlemede taşsız bırakılacak taş grubuna tıklayın, sonra Seçili taşları sil'e basın.";
+        }
+
+        private void SelectImage_Click(object sender, RoutedEventArgs e)
+        {
+            using (var dialog = new System.Windows.Forms.OpenFileDialog
+            {
+                Filter = "Image Files|*.jpg;*.jpeg;*.png|All Files|*.*",
+                CheckFileExists = true,
+                Multiselect = false,
+                Title = "StoneMaster için görsel seçin"
+            })
+            {
+                var corelWindow = Process.GetCurrentProcess().MainWindowHandle;
+                var result = corelWindow == IntPtr.Zero
+                    ? dialog.ShowDialog()
+                    : dialog.ShowDialog(new CorelWindow(corelWindow));
+
+                if (result == System.Windows.Forms.DialogResult.OK)
+                {
+                    try
+                    {
+                        var context = MainPlugin.Corel.ImportBitmapContext(dialog.FileName);
+                        Vm.SetBitmapContext(context);
+                        txtImage.Text = System.IO.Path.GetFileName(Vm.ImagePath);
+                        txtStatus.Text = "Görsel CorelDRAW çalışma alanına aktarıldı.";
+                    }
+                    catch (Exception ex)
+                    {
+                        txtStatus.Text = "Görsel aktarılamadı: " + ex.Message;
+                        MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+            }
+        }
+
+        private sealed class CorelWindow : System.Windows.Forms.IWin32Window
+        {
+            public CorelWindow(IntPtr handle) => Handle = handle;
+            public IntPtr Handle { get; }
+        }
+
+        private async void Preview_Click(object sender, RoutedEventArgs e)
+        {
+            ReadUi();
+            try
+            {
+                SetProgress(0, "Hazırlanıyor...");
+                var response = await Vm.PreviewAsync(new Progress<string>(UpdateProgress));
+                RenderPreview(response);
+                _previewEdited = false;
+                SetProgress(100, "Tamamlandı");
+                txtStatus.Text = $"TAŞ: {response.stone_count:N0}\nMALİYET: {response.total_cost_tl:N2} TL\nRENK: {response.used_colors}";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text = ex.Message;
+            }
+        }
+
+        private async void Apply_Click(object sender, RoutedEventArgs e)
+        {
+            ReadUi();
+            try
+            {
+                SetProgress(0, "Hazırlanıyor...");
+                var response = Vm.LastResponse;
+                if (response == null || !_previewEdited)
+                    response = await Vm.PreviewAsync(new Progress<string>(UpdateProgress));
+                response = FilterResponse(response);
+                MainPlugin.Corel.ApplyGeneration(response, Vm.CurrentBitmapContext, renderPreview: true, renderLaser: true, clearPrevious: true);
+                SetProgress(100, "Tamamlandı");
+                txtStoneCount.Text = $"Taş sayısı: {response.stones.Count:N0}";
+                txtStatus.Text = $"Uygulandı: {response.stone_count:N0} taş.";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text = ex.Message;
+            }
+        }
+
+
+        private void RenderPreview(StoneMaster.Corel.Models.EngineResponse response)
+        {
+            PreviewCanvas.Children.Clear();
+            txtStoneCount.Text = $"Taş sayısı: {response?.stones?.Count ?? 0:N0}";
+            if (response == null || response.width_mm <= 0 || response.height_mm <= 0) return;
+
+            const double previewWidth = 360.0;
+            var previewHeight = previewWidth * response.height_mm / response.width_mm;
+            PreviewCanvas.Width = previewWidth;
+            PreviewCanvas.Height = previewHeight;
+            PreviewSurface.Width = previewWidth;
+            PreviewSurface.Height = previewHeight;
+
+            PreviewImage.Source = null;
+            if (!string.IsNullOrWhiteSpace(Vm.ImagePath) && File.Exists(Vm.ImagePath))
+            {
+                var image = new System.Windows.Media.Imaging.BitmapImage();
+                image.BeginInit();
+                image.UriSource = new Uri(Vm.ImagePath, UriKind.Absolute);
+                image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                image.EndInit();
+                PreviewImage.Source = image;
+                PreviewImage.Visibility = chkShowBackground.IsChecked.GetValueOrDefault()
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            var scaleX = PreviewCanvas.Width / response.width_mm;
+            var scaleY = PreviewCanvas.Height / response.height_mm;
+            var stoneScale = System.Math.Min(scaleX, scaleY);
+
+            for (var index = 0; index < response.stones.Count; index++)
+            {
+                var stone = response.stones[index];
+                var d = System.Math.Max(2.0, stone.DiameterMm * stoneScale);
+                var brush = TryCreateBrush(stone.HexColor);
+                var ellipse = new Ellipse
+                {
+                    Width = d,
+                    Height = d,
+                    Fill = brush,
+                    Stroke = _selectedStoneIndexes.Contains(index) ? System.Windows.Media.Brushes.Yellow : System.Windows.Media.Brushes.Transparent,
+                    StrokeThickness = _selectedStoneIndexes.Contains(index) ? 2 : 0
+                };
+                ellipse.Tag = index;
+                ellipse.MouseLeftButtonDown += PreviewStone_MouseLeftButtonDown;
+                Canvas.SetLeft(ellipse, stone.XMm * scaleX - d / 2);
+                Canvas.SetTop(ellipse, stone.YMm * scaleY - d / 2);
+                PreviewCanvas.Children.Add(ellipse);
+            }
+        }
+
+        private void PreviewStone_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (_sampleColorMode)
+                return;
+
+            var ellipse = (Ellipse)sender;
+            var index = (int)ellipse.Tag;
+            var clickedStone = Vm.LastResponse.stones[index];
+            var matchingIndexes = Vm.LastResponse.stones
+                .Select((stone, itemIndex) => new { stone, itemIndex })
+                .Where(item => item.stone.StoneName == clickedStone.StoneName
+                    && item.stone.ColorName == clickedStone.ColorName)
+                .Select(item => item.itemIndex);
+            var selectGroup = !_selectedStoneIndexes.Contains(index);
+            foreach (var matchingIndex in matchingIndexes)
+            {
+                if (selectGroup)
+                    _selectedStoneIndexes.Add(matchingIndex);
+                else
+                    _selectedStoneIndexes.Remove(matchingIndex);
+            }
+            if (_excludeSelectedMode)
+            {
+                _excludeSelectedMode = false;
+                txtStatus.Text = "Taşsız bırakılacak grup seçildi. Tümünü kaldırmak için Seçili taşları sil'e basın.";
+            }
+            RenderPreview(Vm.LastResponse);
+            e.Handled = true;
+        }
+
+        private void DeleteSelectedStones_Click(object sender, RoutedEventArgs e)
+        {
+            if (Vm.LastResponse == null || _selectedStoneIndexes.Count == 0)
+                return;
+
+            var deletedGroups = Vm.LastResponse.stones
+                .Where((_, index) => _selectedStoneIndexes.Contains(index))
+                .Select(item => new { item.StoneName, item.ColorName })
+                .Distinct()
+                .ToList();
+            foreach (var group in deletedGroups)
+                Vm.ExcludeStoneGroup(group.StoneName, group.ColorName);
+            Vm.LastResponse.stones = Vm.LastResponse.stones
+                .Where((_, index) => !_selectedStoneIndexes.Contains(index))
+                .ToList();
+            Vm.LastResponse.stone_count = Vm.LastResponse.stones.Count;
+            txtStoneCount.Text = $"Taş sayısı: {Vm.LastResponse.stones.Count:N0}";
+            _selectedStoneIndexes.Clear();
+            _excludeSelectedMode = false;
+            _previewEdited = true;
+            RenderPreview(Vm.LastResponse);
+            txtStatus.Text = "Seçili taşlar silindi. Değişiklikleri Corel'e aktarmak için Uygula'ya basın.";
+        }
+
+        private void SampleColor_Click(object sender, RoutedEventArgs e)
+        {
+            _sampleColorMode = true;
+            txtStatus.Text = "Önizleme üzerindeki bir noktaya tıklayarak rengi ekleyin.";
+        }
+
+        private void SelectBackgroundColor_Click(object sender, RoutedEventArgs e)
+        {
+            using (var dialog = new System.Windows.Forms.ColorDialog())
+            {
+                if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                    return;
+
+                var color = dialog.Color;
+                Vm.BackgroundColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                txtBackgroundColor.Text = Vm.BackgroundColor;
+                cmbBackgroundMode.SelectedIndex = 3;
+                txtStatus.Text = "Arka plan rengi seçildi.";
+            }
+        }
+
+        private void PreviewCanvas_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (!_sampleColorMode || string.IsNullOrWhiteSpace(Vm.ImagePath) || !File.Exists(Vm.ImagePath))
+                return;
+
+            var point = e.GetPosition(PreviewCanvas);
+            using (var bitmap = new Bitmap(Vm.ImagePath))
+            {
+                var x = Math.Max(0, Math.Min(bitmap.Width - 1, (int)(point.X / PreviewCanvas.Width * bitmap.Width)));
+                var y = Math.Max(0, Math.Min(bitmap.Height - 1, (int)(point.Y / PreviewCanvas.Height * bitmap.Height)));
+                var color = bitmap.GetPixel(x, y);
+                var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                if (!Vm.CustomPaletteHex.Contains(hex))
+                {
+                    Vm.CustomPaletteHex.Add(hex);
+                    cmbPalette.Items.Add(new ListBoxItem
+                    {
+                        Content = new CheckBox { Content = hex, IsChecked = true }
+                    });
+                }
+            }
+            _sampleColorMode = false;
+            txtStatus.Text = "Fotoğraftan renk eklendi. Yeni önizleme için tekrar Önizleme'ye basın.";
+            e.Handled = true;
+        }
+
+        private void BackgroundVisibility_Click(object sender, RoutedEventArgs e)
+        {
+            PreviewImage.Visibility = chkShowBackground.IsChecked.GetValueOrDefault()
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void Zoom_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (PreviewSurface != null)
+            {
+                PreviewSurface.LayoutTransform = new ScaleTransform(e.NewValue, e.NewValue);
+            }
+        }
+
+        private static SolidColorBrush TryCreateBrush(string hexColor)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(hexColor))
+                    return (SolidColorBrush)new BrushConverter().ConvertFromString(hexColor);
+            }
+            catch (FormatException) { }
+
+            return new SolidColorBrush(Colors.DimGray);
+        }
+
+        private StoneMaster.Corel.Models.EngineResponse FilterResponse(StoneMaster.Corel.Models.EngineResponse response)
+        {
+            if (!chkApplySelectedOnly.IsChecked.GetValueOrDefault())
+                return response;
+
+            var allowedSizes = Vm.StoneSizes ?? new System.Collections.Generic.List<string>();
+            var allowedColors = Vm.PaletteColors ?? new System.Collections.Generic.List<string>();
+            response.stones = response.stones.Where(stone =>
+                allowedSizes.Contains(stone.StoneName) &&
+                (allowedColors.Count == 0 || allowedColors.Contains(stone.ColorName) || allowedColors.Contains(stone.HexColor)))
+                .ToList();
+            response.stone_count = response.stones.Count;
+            return response;
+        }
+
+        private void UpdateProgress(string message)
+        {
+            var parts = (message ?? string.Empty).Split('|');
+            foreach (var part in parts)
+            {
+                if (part.StartsWith("PROGRESS=", StringComparison.OrdinalIgnoreCase))
+                {
+                    double value;
+                    if (double.TryParse(part.Substring(9), System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out value))
+                        ProgressBar.Value = Math.Max(0, Math.Min(100, value));
+                }
+                else if (!part.StartsWith("STAGE=", StringComparison.OrdinalIgnoreCase))
+                {
+                    txtProgress.Text = part;
+                }
+            }
+        }
+
+        private void SetProgress(double value, string text)
+        {
+            ProgressBar.Value = value;
+            txtProgress.Text = text;
+        }
+
+        private void Cancel_Click(object sender, RoutedEventArgs e) => Vm.Cancel();
+
+        private void ReadUi()
+        {
+            Vm.StoneSizes = GetCheckedValues(cmbStoneSizes);
+            if (Vm.StoneSizes.Count == 0)
+                throw new InvalidOperationException("En az bir taş boyutunu işaretleyin.");
+            Vm.PaletteColors = GetCheckedValues(cmbPalette);
+            Vm.BackgroundMode = ((System.Windows.Controls.ComboBoxItem)cmbBackgroundMode.SelectedItem).Content.ToString();
+            Vm.BackgroundTolerance = double.Parse(txtBackgroundTolerance.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.BackgroundColor = txtBackgroundColor.Text;
+            Vm.Gap = double.Parse(txtGap.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.LaserTolerance = double.Parse(txtLaser.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.Density = sldDensity.Value;
+            Vm.EdgeSensitivity = sldEdge.Value;
+            Vm.DetailSensitivity = sldDetail.Value;
+            Vm.BackgroundThreshold = (int)sldBg.Value;
+            Vm.FabricWidthMm = double.Parse(txtWidth.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.FabricHeightMm = string.IsNullOrWhiteSpace(txtHeight.Text)
+                ? (double?)null
+                : double.Parse(txtHeight.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.Mode = ((System.Windows.Controls.ComboBoxItem)cmbMode.SelectedItem).Content.ToString();
+            Vm.BudgetTl = double.Parse(txtBudget.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.StoneUnitPriceTl = string.IsNullOrWhiteSpace(txtStoneUnitPrice.Text)
+                ? (double?)null
+                : double.Parse(txtStoneUnitPrice.Text, System.Globalization.CultureInfo.InvariantCulture);
+            Vm.Sprinkle = chkSprinkle.IsChecked.GetValueOrDefault();
+            Vm.EdgeOnly = chkEdgeOnly.IsChecked.GetValueOrDefault();
+            Vm.EdgeThreshold = (int)sldEdgeThreshold.Value;
+        }
+
+        private void ExcludeColor_Click(object sender, RoutedEventArgs e)
+        {
+            _sampleColorMode = true;
+            txtStatus.Text = "Hariç tutulacak rengi seçmek için önizlemede fotoğrafın üzerine tıklayın.";
+        }
+
+        private void SelectEdges_Click(object sender, RoutedEventArgs e)
+        {
+            chkEdgeOnly.IsChecked = true;
+            txtStatus.Text = "Kenar dizimi etkin. Eşik değerini ayarlayıp Önizleme'ye basın.";
+        }
+
+        private static List<string> GetCheckedValues(ListBox list)
+        {
+            return list.Items.OfType<ListBoxItem>()
+                .Select(item => item.Content as CheckBox)
+                .Where(checkBox => checkBox != null && checkBox.IsChecked.GetValueOrDefault())
+                .Select(checkBox => checkBox.Content.ToString())
+                .ToList();
+        }
+    }
+}

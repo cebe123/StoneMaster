@@ -1,0 +1,13 @@
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel.csproj.AssemblyReference.cache
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\Docker\StoneDocker.baml
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\UI\StoneDockerView.baml
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\Docker\StoneDocker.g.cs
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel_MarkupCompile.cache
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel.g.resources
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel.csproj.CoreCompileInputs.cache
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\bin\x64\Release\net48\StoneMaster.Corel.dll.config
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\bin\x64\Release\net48\StoneMaster.Corel.dll
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\bin\x64\Release\net48\StoneMaster.Corel.pdb
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel.dll
+C:\Users\adnan\Downloads\StoneMaster_Source\StoneMaster\corel\StoneMaster.Corel\obj\x64\Release\net48\StoneMaster.Corel.pdb
