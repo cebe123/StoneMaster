@@ -1,7 +1,27 @@
-.gradle/
-build/
-*/build/
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dependencies
+venv/
+.venv/
+.env
+.env.local
+*.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
 .idea/
-*.iml
-local.properties
-.DS_Store
+
+# Build artifacts
+dist/
+build/
+target/
+```
