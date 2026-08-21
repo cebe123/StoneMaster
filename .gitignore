@@ -1,21 +1,40 @@
-```gitignore
-# PowerShell build script artifacts
-*.psd1
-*.psm1
-*.pdb
-*.xml
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dependencies
+.venv/
+venv/
+env/
+pip-log.txt
+pipenv.lock
+
+# Logs
 *.log
 
-# Temp files from PowerShell scripts
-*.tmp
-*.temp
+# Environment
+.env
+.env.local
+.env.*
+.ENV
 
-# Build output directories (if any created by the build scripts)
-build/
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Build artifacts
 dist/
-output/
-bin/
-obj/
-Debug/
-Release/
+build/
+*.egg-info/
 ```

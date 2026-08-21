@@ -106,6 +106,20 @@ namespace StoneMaster.Corel.UI
 
         private EngineRequest BuildRequest(string path)
         {
+            // Stil belirleme: Mode parametresini style olarak kullan
+            // FULL -> balanced, EDGE -> edge, FILL -> fill, SCATTER -> scatter
+            string style = "balanced";
+            if (EdgeOnly)
+                style = "edge";
+            else if (Sprinkle)
+                style = "scatter";
+            else if (string.Equals(Mode, "FILL", StringComparison.OrdinalIgnoreCase))
+                style = "fill";
+            else if (string.Equals(Mode, "EDGE", StringComparison.OrdinalIgnoreCase))
+                style = "edge";
+            else if (string.Equals(Mode, "SCATTER", StringComparison.OrdinalIgnoreCase))
+                style = "scatter";
+            
             return new EngineRequest
             {
                 image_path = path,
@@ -124,6 +138,7 @@ namespace StoneMaster.Corel.UI
                 edge_sensitivity = EdgeSensitivity,
                 detail_sensitivity = DetailSensitivity,
                 mode = Mode,
+                style = style,  // Yeni style parametresi
                 calculate_cost = true,
                 budget_enabled = string.Equals(Mode, "BUDGET", StringComparison.OrdinalIgnoreCase),
                 target_budget_tl = BudgetTl,

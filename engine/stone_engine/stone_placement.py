@@ -4,14 +4,26 @@ import random
 from .color_quantization import nearest_palette
 from .models import StonePlacement, StoneDef, PaletteColor
 
-def create_candidates(image, valid_mask, edge, stone, palette, density, edge_weight=0.30,
+def create_candidates(image, valid_mask, edge, stones, palette, density, edge_weight=0.30,
                       detail_weight=0.15, color_weight=0.45, local_weight=0.10,
                       sprinkle=False, exclude_dark=False, dark_threshold=70,
-                      edge_only=False, edge_threshold=80):
+                      edge_only=False, edge_threshold=80, fill_interior=True):
     h, w = image.shape[:2]
     # Physical pitch approximation is handled after physical scale is known.
     # Pixel pitch is chosen adaptively from the desired density.
+    # Use first stone for base step calculation
+    if isinstance(stones, list) and len(stones) > 0:
+        stone = stones[0]
+    else:
+        stone = stones
     base_step = max(2, int(round(stone.diameter_mm / max(0.25, 0.75 * density))))
+    
+    # İç alan maskesi oluştur (fill modu için)
+    interior = None
+    if fill_interior and not sprinkle and not edge_only:
+        from .preprocessing import interior_mask
+        interior = interior_mask(edge, valid_mask)
+    
     points = []
 
     for y in range(base_step // 2, h, base_step):
@@ -20,9 +32,16 @@ def create_candidates(image, valid_mask, edge, stone, palette, density, edge_wei
                 random.seed(y * w + x)
                 x = max(0, min(w - 1, x + random.randint(-base_step // 3, base_step // 3)))
                 y = max(0, min(h - 1, y + random.randint(-base_step // 3, base_step // 3)))
+            
+            # Normal modda hem valid_mask hem de interior_mask kontrolü
             if not valid_mask[y, x]:
                 continue
-            if edge_only and edge[y, x] < edge_threshold:
+            
+            # fill_interior modunda: sadece iç alandaki noktalara taş koy
+            if fill_interior and interior is not None and not sprinkle and not edge_only:
+                if not interior[y, x]:
+                    continue
+            elif edge_only and edge[y, x] < edge_threshold:
                 continue
 
             r, g, b = map(int, image[y, x])

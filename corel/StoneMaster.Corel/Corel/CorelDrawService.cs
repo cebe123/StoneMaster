@@ -190,22 +190,38 @@ namespace StoneMaster.Corel.Corel
                 var previewLayer = LayerService.GetOrCreateLayer(layers, page, "STONE_PREVIEW", clearPrevious);
                 var laserLayer = LayerService.GetOrCreateLayer(layers, page, "LAZER_KALIP_KESIM", clearPrevious);
 
-                var ctx = bitmapContext ?? new BitmapContext
+                // BitmapContext yoksa veya geçersizse, response değerlerini kullan
+                var ctx = bitmapContext;
+                
+                // Eğer bitmapContext null veya geçersiz ise, response'tan al
+                if (ctx == null || ctx.Width <= 0 || ctx.Height <= 0)
                 {
-                    Left = 0,
-                    Bottom = 0,
-                    Width = response.width_mm,
-                    Height = response.height_mm
-                };
-
-                if (ctx.Width <= 0 || ctx.Height <= 0 || response.width_mm <= 0 || response.height_mm <= 0)
-                    throw new InvalidOperationException("Görselin genişlik/yükseklik bilgisi geçersiz. Görseli yeniden seçip önizlemeyi tekrar oluşturun.");
+                    ctx = new BitmapContext
+                    {
+                        Left = 0,
+                        Bottom = 0,
+                        Width = response.width_mm > 0 ? response.width_mm : 1000,
+                        Height = response.height_mm > 0 ? response.height_mm : 1000
+                    };
+                }
+                
+                // Response'taki değerler de geçersizse varsayılan değer kullan
+                var widthMm = ctx.Width > 0 ? ctx.Width : 1000;
+                var heightMm = ctx.Height > 0 ? ctx.Height : 1000;
+                
+                // Response width/height mm değerlerini de kontrol et
+                if (response.width_mm <= 0 || response.height_mm <= 0)
+                {
+                    // Eğer response'da width/height yoksa, bitmapContext'tan al
+                    response.width_mm = widthMm;
+                    response.height_mm = heightMm;
+                }
 
                 var mapper = new CoordinateMapper(
                     ctx.Left,
                     ctx.Bottom,
-                    ctx.Width,
-                    ctx.Height);
+                    widthMm,
+                    heightMm);
 
                 if (renderPreview)
                     StoneRenderer.RenderPreview(previewLayer, response.stones, response.width_mm, response.height_mm, mapper);
