@@ -1,35 +1,48 @@
-# PowerShell build artifacts
-*.psd1
-*.psm1
-*.pdb
-*.dll
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
 *.exe
+*.dll
+*.so
+*.class
+*.out
 
-# Build directories
-build/
+# Dependencies
+.venv/
+venv/
+node_modules/
 dist/
-output/
+build/
+target/
+.gradle/
+.mypy_cache/
+.pytest_cache/
 
-# Log files
+# Logs and temp files
 *.log
 *.tmp
+*.swp
+*.swo
 
-# Environment files
+# Environment
 .env
 .env.local
 *.env.*
 
-# Editor/IDE files
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# System files
 .DS_Store
 Thumbs.db
 
-# Coverage and testing
+# Coverage
 coverage/
 htmlcov/
 .coverage
@@ -53,7 +66,4 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+```

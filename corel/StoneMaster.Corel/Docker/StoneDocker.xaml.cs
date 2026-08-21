@@ -17,7 +17,10 @@ namespace StoneMaster.Corel.Docker
         private readonly HashSet<int> _selectedStoneIndexes = new HashSet<int>();
         private bool _sampleColorMode;
         private bool _excludeSelectedMode;
+        private bool _interactiveSelectionMode;
+        private bool _invertSelection;
         private bool _previewEdited;
+        private List<(int x, int y)> _interactivePoints = new List<(int, int)>();
         private StoneDockerViewModel Vm => (StoneDockerViewModel)DataContext;
 
         private void OpenFloatingWindow_Click(object sender, RoutedEventArgs e)
@@ -89,18 +92,38 @@ namespace StoneMaster.Corel.Docker
         private async void Preview_Click(object sender, RoutedEventArgs e)
         {
             ReadUi();
+            
+            // İnteraktif seçim modunda nokta listesini engine'e geçir
+            if (_interactiveSelectionMode && _interactivePoints.Count > 0)
+            {
+                txtStatus.Text = $"🎯 {_interactivePoints.Count} nokta seçildi. Önizleme oluşturuluyor...";
+            }
+            
             try
             {
                 SetProgress(0, "Hazırlanıyor...");
                 var response = await Vm.PreviewAsync(new Progress<string>(UpdateProgress));
                 RenderPreview(response);
                 _previewEdited = false;
+                
+                // İnteraktif mod işaretçilerini temizle
+                if (_interactiveSelectionMode)
+                {
+                    _interactiveSelectionMode = false;
+                    txtSelectionMode.Text = "";
+                }
+                
                 SetProgress(100, "Tamamlandı");
-                txtStatus.Text = $"TAŞ: {response.stone_count:N0}\nMALİYET: {response.total_cost_tl:N2} TL\nRENK: {response.used_colors}";
+                
+                // Durum bilgisi güncelle
+                txtStoneCount.Text = $"🔢 Taş Sayısı: {response.stone_count:N0}";
+                txtCost.Text = $"💰 Tahmini Maliyet: {response.total_cost_tl:N2} TL";
+                txtStatus.Text = $"✅ Hazır: {response.stone_count:N0} taş | {response.total_cost_tl:N2} TL | {response.used_colors} renk";
             }
             catch (Exception ex)
             {
-                txtStatus.Text = ex.Message;
+                txtStatus.Text = "❌ Hata: " + ex.Message;
+                MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -114,14 +137,25 @@ namespace StoneMaster.Corel.Docker
                 if (response == null || !_previewEdited)
                     response = await Vm.PreviewAsync(new Progress<string>(UpdateProgress));
                 response = FilterResponse(response);
+                
+                // CorelDRAW'a aktar - görsel boyutları doğru şekilde geçiriliyor
                 MainPlugin.Corel.ApplyGeneration(response, Vm.CurrentBitmapContext, renderPreview: true, renderLaser: true, clearPrevious: true);
+                
                 SetProgress(100, "Tamamlandı");
                 txtStoneCount.Text = $"Taş sayısı: {response.stones.Count:N0}";
-                txtStatus.Text = $"Uygulandı: {response.stone_count:N0} taş.";
+                
+                // Maliyet bilgisi güncelle
+                if (Vm.LastResponse != null)
+                {
+                    txtCost.Text = $"💰 Tahmini Maliyet: {Vm.LastResponse.total_cost_tl:N2} TL";
+                }
+                
+                txtStatus.Text = $"✅ Uygulandı: {response.stone_count:N0} taş, {response.total_cost_tl:N2} TL";
             }
             catch (Exception ex)
             {
-                txtStatus.Text = ex.Message;
+                txtStatus.Text = "❌ Hata: " + ex.Message;
+                MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -352,7 +386,11 @@ namespace StoneMaster.Corel.Docker
             if (Vm.StoneSizes.Count == 0)
                 throw new InvalidOperationException("En az bir taş boyutunu işaretleyin.");
             Vm.PaletteColors = GetCheckedValues(cmbPalette);
-            Vm.BackgroundMode = ((System.Windows.Controls.ComboBoxItem)cmbBackgroundMode.SelectedItem).Content.ToString();
+            
+            // Arka plan modu - ComboBox'tan seçilen metni al
+            var bgModeItem = cmbBackgroundMode.SelectedItem as System.Windows.Controls.ComboBoxItem;
+            Vm.BackgroundMode = bgModeItem?.Content?.ToString() ?? "AUTO";
+            
             Vm.BackgroundTolerance = double.Parse(txtBackgroundTolerance.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.BackgroundColor = txtBackgroundColor.Text;
             Vm.Gap = double.Parse(txtGap.Text, System.Globalization.CultureInfo.InvariantCulture);
@@ -361,18 +399,41 @@ namespace StoneMaster.Corel.Docker
             Vm.EdgeSensitivity = sldEdge.Value;
             Vm.DetailSensitivity = sldDetail.Value;
             Vm.BackgroundThreshold = (int)sldBg.Value;
-            Vm.FabricWidthMm = double.Parse(txtWidth.Text, System.Globalization.CultureInfo.InvariantCulture);
-            Vm.FabricHeightMm = string.IsNullOrWhiteSpace(txtHeight.Text)
-                ? (double?)null
-                : double.Parse(txtHeight.Text, System.Globalization.CultureInfo.InvariantCulture);
-            Vm.Mode = ((System.Windows.Controls.ComboBoxItem)cmbMode.SelectedItem).Content.ToString();
+            
+            // Kalıp boyutu seçimi
+            var templateItem = cmbTemplateSize.SelectedItem as System.Windows.Controls.ComboBoxItem;
+            string templateTag = templateItem?.Tag?.ToString() ?? "500,700";
+            
+            if (templateTag == "custom")
+            {
+                // Özel ölçü kullan
+                Vm.FabricWidthMm = double.Parse(txtWidth.Text, System.Globalization.CultureInfo.InvariantCulture);
+                Vm.FabricHeightMm = string.IsNullOrWhiteSpace(txtHeight.Text)
+                    ? (double?)null
+                    : double.Parse(txtHeight.Text, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                // Standart kalıp boyutu kullan
+                var parts = templateTag.Split(',');
+                Vm.FabricWidthMm = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+                Vm.FabricHeightMm = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+                // TextBox'ları da güncelle
+                txtWidth.Text = parts[0];
+                txtHeight.Text = parts[1];
+            }
+            
+            // Mod seçimi - ComboBox'tan seçilen metni al ve ilk kelimeyi kullan (FULL, EDGE, vb.)
+            var modeItem = cmbMode.SelectedItem as System.Windows.Controls.ComboBoxItem;
+            string modeText = modeItem?.Content?.ToString() ?? "FULL";
+            Vm.Mode = modeText.Split(' ')[0]; // İlk kelimeyi al (FULL, EDGE, FILL, SCATTER, BUDGET)
+            
             Vm.BudgetTl = double.Parse(txtBudget.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.StoneUnitPriceTl = string.IsNullOrWhiteSpace(txtStoneUnitPrice.Text)
                 ? (double?)null
                 : double.Parse(txtStoneUnitPrice.Text, System.Globalization.CultureInfo.InvariantCulture);
             Vm.Sprinkle = chkSprinkle.IsChecked.GetValueOrDefault();
-            Vm.EdgeOnly = chkEdgeOnly.IsChecked.GetValueOrDefault();
-            // EdgeThreshold artık kullanılmıyor, varsayılan değer verelim
+            Vm.EdgeOnly = chkEdgeOnly.IsChecked.GetValueOrDefault(); // Artık checkbox ile kontrol ediliyor
             Vm.EdgeThreshold = 80;
         }
 
@@ -380,6 +441,100 @@ namespace StoneMaster.Corel.Docker
         {
             _sampleColorMode = true;
             txtStatus.Text = "Hariç tutulacak rengi seçmek için önizlemede fotoğrafın üzerine tıklayın.";
+        }
+
+        private void InteractiveSelect_Click(object sender, RoutedEventArgs e)
+        {
+            _interactiveSelectionMode = true;
+            _interactivePoints.Clear();
+            _invertSelection = false;
+            txtSelectionMode.Text = "🎯 Mod: Alan Seçimi Aktif - Önizlemede noktalara tıklayın";
+            txtStatus.Text = "Önizleme üzerinde desenin içini doldurmak istediğiniz alanlara tıklayın. Bitirince 'ÖNİZLEME OLUŞTUR'a basın.";
+        }
+
+        private void PreviewCanvas_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            // İnteraktif alan seçimi modu
+            if (_interactiveSelectionMode)
+            {
+                var point = e.GetPosition(PreviewCanvas);
+                // Preview canvas koordinatlarını orijinal görsel koordinatlarına çevir
+                if (Vm.LastResponse != null && !string.IsNullOrWhiteSpace(Vm.ImagePath))
+                {
+                    using (var bitmap = new Bitmap(Vm.ImagePath))
+                    {
+                        var imgX = (int)(point.X / PreviewCanvas.Width * bitmap.Width);
+                        var imgY = (int)(point.Y / PreviewCanvas.Height * bitmap.Height);
+                        imgX = Math.Max(0, Math.Min(bitmap.Width - 1, imgX));
+                        imgY = Math.Max(0, Math.Min(bitmap.Height - 1, imgY));
+                        
+                        _interactivePoints.Add((imgX, imgY));
+                        
+                        // Görsel geri bildirim - küçük bir daire çiz
+                        var marker = new Ellipse
+                        {
+                            Width = 8,
+                            Height = 8,
+                            Fill = System.Windows.Media.Brushes.Red,
+                            Stroke = System.Windows.Media.Brushes.White,
+                            StrokeThickness = 1
+                        };
+                        Canvas.SetLeft(marker, point.X - 4);
+                        Canvas.SetTop(marker, point.Y - 4);
+                        PreviewCanvas.Children.Add(marker);
+                        
+                        txtSelectionMode.Text = $"🎯 {_interactivePoints.Count} nokta seçildi";
+                    }
+                }
+                e.Handled = true;
+                return;
+            }
+            
+            // Renk örnekleme modu
+            if (!_sampleColorMode || string.IsNullOrWhiteSpace(Vm.ImagePath) || !File.Exists(Vm.ImagePath))
+                return;
+
+            var clickPoint = e.GetPosition(PreviewCanvas);
+            using (var bitmap = new Bitmap(Vm.ImagePath))
+            {
+                var x = Math.Max(0, Math.Min(bitmap.Width - 1, (int)(clickPoint.X / PreviewCanvas.Width * bitmap.Width)));
+                var y = Math.Max(0, Math.Min(bitmap.Height - 1, (int)(clickPoint.Y / PreviewCanvas.Height * bitmap.Height)));
+                var color = bitmap.GetPixel(x, y);
+                var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                
+                // Hariç tutma modunda
+                if (_excludeSelectedMode)
+                {
+                    // Bu rengi paletten çıkar
+                    for (int i = cmbPalette.Items.Count - 1; i >= 0; i--)
+                    {
+                        var item = cmbPalette.Items[i] as ListBoxItem;
+                        var checkBox = item?.Content as CheckBox;
+                        if (checkBox != null && checkBox.Content.ToString().Contains(hex))
+                        {
+                            cmbPalette.Items.RemoveAt(i);
+                            break;
+                        }
+                    }
+                    txtStatus.Text = $"Renk hariç tutuldu: {hex}";
+                }
+                else
+                {
+                    // Normal renk ekleme modu
+                    if (!Vm.CustomPaletteHex.Contains(hex))
+                    {
+                        Vm.CustomPaletteHex.Add(hex);
+                        cmbPalette.Items.Add(new ListBoxItem
+                        {
+                            Content = new CheckBox { Content = hex, IsChecked = true }
+                        });
+                    }
+                    txtStatus.Text = $"Renk eklendi: {hex}";
+                }
+            }
+            _sampleColorMode = false;
+            _excludeSelectedMode = false;
+            e.Handled = true;
         }
 
         // SelectEdges_Click fonksiyonu kaldırıldı - edge_only checkbox'ı doğrudan kullanılabilir

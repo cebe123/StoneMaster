@@ -7,7 +7,8 @@ from .models import StonePlacement, StoneDef, PaletteColor
 def create_candidates(image, valid_mask, edge, stones, palette, density, edge_weight=0.30,
                       detail_weight=0.15, color_weight=0.45, local_weight=0.10,
                       sprinkle=False, exclude_dark=False, dark_threshold=70,
-                      edge_only=False, edge_threshold=80, fill_interior=True):
+                      edge_only=False, edge_threshold=80, fill_interior=True,
+                      grid_snap=False, interactive_mask=None):
     h, w = image.shape[:2]
     # Physical pitch approximation is handled after physical scale is known.
     # Pixel pitch is chosen adaptively from the desired density.
@@ -18,9 +19,43 @@ def create_candidates(image, valid_mask, edge, stones, palette, density, edge_we
         stone = stones
     base_step = max(2, int(round(stone.diameter_mm / max(0.25, 0.75 * density))))
     
+    # Grid snap aktifse regular grid kullan
+    if grid_snap:
+        # Grid tabanlı yerleştirme - satır ve sütun hizası garantili
+        step_x = max(2, int(round(stone.diameter_mm / max(0.25, density))))
+        step_y = step_x  # Kare grid
+        
+        # Y offset hesapla (satır arası mesafe)
+        row_offset = int(round(step_y * 0.866))  # Hexagonal packing için 0.866
+        
+        points = []
+        for row_idx, y in enumerate(range(row_offset // 2, h, row_offset)):
+            # Her diğer satırı kaydır (hex pattern)
+            x_start = (step_x // 2) if row_idx % 2 == 0 else (step_x // 2 + step_x // 2)
+            for x in range(x_start, w, step_x):
+                if not valid_mask[y, x]:
+                    continue
+                
+                # Interactive mask varsa uygula (kullanıcı seçimi)
+                if interactive_mask is not None and not interactive_mask[y, x]:
+                    continue
+                
+                # Edge-only modunda sadece kenarlara
+                if edge_only and edge[y, x] < edge_threshold:
+                    continue
+                
+                r, g, b = map(int, image[y, x])
+                if exclude_dark and (0.299 * r + 0.587 * g + 0.114 * b) <= dark_threshold:
+                    continue
+                palette_color, _ = nearest_palette((r, g, b), palette)
+                edge_strength = float(edge[y, x]) / 255.0
+                points.append((x, y, palette_color, edge_strength))
+        
+        return points
+    
     # İç alan maskesi oluştur (fill modu için)
     interior = None
-    if fill_interior and not sprinkle and not edge_only:
+    if fill_interior and not sprinkle and not edge_only and interactive_mask is None:
         from .preprocessing import interior_mask
         interior = interior_mask(edge, valid_mask)
     
@@ -37,8 +72,12 @@ def create_candidates(image, valid_mask, edge, stones, palette, density, edge_we
             if not valid_mask[y, x]:
                 continue
             
+            # Interactive mask varsa öncelik ver (kullanıcı seçimi)
+            if interactive_mask is not None:
+                if not interactive_mask[y, x]:
+                    continue
             # fill_interior modunda: sadece iç alandaki noktalara taş koy
-            if fill_interior and interior is not None and not sprinkle and not edge_only:
+            elif fill_interior and interior is not None and not sprinkle and not edge_only:
                 if not interior[y, x]:
                     continue
             elif edge_only and edge[y, x] < edge_threshold:
