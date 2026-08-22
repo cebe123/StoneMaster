@@ -38,7 +38,7 @@ namespace StoneMaster.Corel.UI
         public string StoneSize { get; set; }
         public List<string> StoneSizes { get; set; } = new List<string> { "SS10" };
         public List<string> PaletteColors { get; set; }
-        public List<string> CustomPaletteHex { get; } = new List<string>();
+        public List<string> CustomPaletteHex { get; set; } = new List<string>();
         public bool Sprinkle { get; set; }
         public bool ExcludeDarkStones { get; set; }
         public int DarkStoneThreshold { get; set; } = 70;
