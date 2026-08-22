@@ -76,16 +76,20 @@ class StonePlacementEngine:
         candidates = create_candidates(image=processed, valid_mask=mask, edge=edges, stones=selected_stones,
                                        palette=selected_palette, density=density, **weights)
         progress(65, "Aday noktalar oluşturuldu")
-        candidates = self._filter_excluded_groups(candidates, excluded_stone_groups)
         candidates = adaptive_prune(candidates, density)
         progress(70, "Yoğunluk optimize edildi")
+
+        excluded = self._normalize_exclusions(excluded_stone_groups)
         image_step_mm = fabric_width_mm / max(1, processed.shape[1])
         gap_px = gap_mm / max(image_step_mm, 1e-9)
         if len(selected_stones) == 1:
+            candidates = [point for point in candidates if (selected_stones[0].name.lower(), point[2].name.lower()) not in excluded]
             radius_px = selected_stones[0].diameter_mm / max(image_step_mm, 1e-9) / 2.0
             candidates = resolve_collisions(candidates, radius_px, gap_px)
         else:
-            candidates = resolve_variable_collisions(assign_stones(candidates, selected_stones), image_step_mm, gap_mm)
+            assigned = assign_stones(candidates, selected_stones)
+            assigned = [point for point in assigned if (point[4].name.lower(), point[2].name.lower()) not in excluded]
+            candidates = resolve_variable_collisions(assigned, image_step_mm, gap_mm)
         progress(80, "Çarpışmalar çözüldü")
         placements = to_placements(points=candidates, stone=selected_stones[0], width_mm=fabric_width_mm, height_mm=fabric_height_mm,
                                    image_width=processed.shape[1], image_height=processed.shape[0], laser_tolerance=laser_tolerance_mm)
@@ -134,6 +138,11 @@ class StonePlacementEngine:
         if rect is not None and (len(rect) != 4 or any(float(v) < 0 or float(v) > 1 for v in rect)):
             raise ValueError("exclusion_rect [x,y,w,h] normalize edilmiş 0..1 değerlerinden oluşmalıdır")
 
+    @staticmethod
+    def _normalize_exclusions(groups):
+        if not groups: return set()
+        return {(str(item[0]).strip().lower(), str(item[1]).strip().lower()) for item in groups if len(item) >= 2}
+
     def _resolve_palette(self, colors, custom_hex):
         if custom_hex:
             result = []
@@ -157,12 +166,6 @@ class StonePlacementEngine:
         left, top = max(0, min(w, int(round(x * w)))), max(0, min(h, int(round(y * h))))
         right, bottom = max(left, min(w, int(round((x + width) * w)))), max(top, min(h, int(round((y + height) * h))))
         result = mask.copy(); result[top:bottom, left:right] = False; return result
-
-    @staticmethod
-    def _filter_excluded_groups(points, excluded_groups):
-        if not excluded_groups: return points
-        excluded = {(str(item[0]).lower(), str(item[1]).lower()) for item in excluded_groups if len(item) >= 2}
-        return [point for point in points if (point[2].name.lower(), point[2].hex.lower()) not in excluded]
 
     @staticmethod
     def _get_style_weights(style, detail_sensitivity):
@@ -194,7 +197,7 @@ def kumas_tas_kalip_uretec(resim_yolu, kumas_genislik_mm=None, kumas_yukseklik_m
         detail_sensitivity=float(detay_hassasiyeti), custom_palette_hex=custom_palette_hex, exclusion_rect=exclusion_rect,
         sprinkle=bool(serpme), exclude_dark_stones=bool(koyu_taslari_haric), dark_stone_threshold=int(koyu_esik),
         excluded_stone_groups=excluded_stone_groups, edge_only=bool(edge_only), edge_threshold=int(edge_threshold),
-        analysis_max_dimension=int(analysis_max_dimension), output_csv=output_csv, progress_callback=progress)
+        grid_snap=False, analysis_max_dimension=int(analysis_max_dimension), output_csv=output_csv, progress_callback=progress)
 
 
 def run_request(request, progress=None):
@@ -209,4 +212,4 @@ def run_request(request, progress=None):
         arka_plan_rengi=request.get("background_color", "#F5F5F5"), custom_palette_hex=request.get("custom_palette_hex"),
         serpme=bool(request.get("sprinkle", False)), koyu_taslari_haric=bool(request.get("exclude_dark_stones", False)), koyu_esik=int(request.get("dark_stone_threshold", 70)),
         excluded_stone_groups=request.get("excluded_stone_groups"), edge_only=bool(request.get("edge_only", False)), edge_threshold=int(request.get("edge_threshold", 80)),
-        analysis_max_dimension=int(request.get("analysis_max_dimension", 1600)), progress=progress)
+        grid_snap=bool(request.get("grid_snap", False)), analysis_max_dimension=int(request.get("analysis_max_dimension", 1600)), progress=progress)
