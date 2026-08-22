@@ -225,11 +225,12 @@ namespace StoneMaster.Corel.UI
             if (string.IsNullOrWhiteSpace(_viewModel.ImagePath)) throw new InvalidOperationException("Önce bir bitmap seçin veya görsel içe aktarın.");
         }
 
-        private void SetBusy(bool busy, string status)
+        private void SetBusy(bool busy, string status = null)
         {
             _busy = busy;
             ProgressBar.IsIndeterminate = busy;
-            StatusText.Text = status;
+            if (!string.IsNullOrWhiteSpace(status))
+                StatusText.Text = status;
         }
 
         private static void ShowError(Exception ex) => MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Error);
