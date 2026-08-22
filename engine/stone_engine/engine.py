@@ -40,13 +40,12 @@ class StonePlacementEngine:
                 output_csv: Optional[str] = None, progress_callback=None) -> Dict[str, Any]:
         progress = progress_callback or (lambda _value, _message: None)
         self._validate_request(image_path=image_path, fabric_width_mm=fabric_width_mm, fabric_height_mm=fabric_height_mm,
-                               stone_sizes=stone_sizes, density=density, gap_mm=gap_mm,
-                               laser_tolerance_mm=laser_tolerance_mm, style=style, background_mode=background_mode,
-                               background_threshold=background_threshold, background_tolerance=background_tolerance,
-                               edge_sensitivity=edge_sensitivity, detail_sensitivity=detail_sensitivity,
-                               edge_threshold=edge_threshold, analysis_max_dimension=analysis_max_dimension,
-                               exclusion_rect=exclusion_rect, stone_unit_price_tl=stone_unit_price_tl)
-
+                               stone_sizes=stone_sizes, density=density, gap_mm=gap_mm, laser_tolerance_mm=laser_tolerance_mm,
+                               style=style, background_mode=background_mode, background_threshold=background_threshold,
+                               background_tolerance=background_tolerance, edge_sensitivity=edge_sensitivity,
+                               detail_sensitivity=detail_sensitivity, edge_threshold=edge_threshold,
+                               analysis_max_dimension=analysis_max_dimension, exclusion_rect=exclusion_rect,
+                               stone_unit_price_tl=stone_unit_price_tl)
         stone_sizes = stone_sizes or ["SS10"]
         selected_stones = [self.stones[name] for name in stone_sizes]
         selected_palette = self._resolve_palette(colors, custom_palette_hex)
@@ -60,7 +59,6 @@ class StonePlacementEngine:
         original_h, original_w = image.shape[:2]
         image, _ = fit_max_dimension(image, analysis_max_dimension)
         progress(20, "Görsel optimize edildi")
-
         mask = background_mask(image, threshold=background_threshold, mode=mode, tolerance=background_tolerance,
                                color=background_color) if exclude_background else np.ones(image.shape[:2], dtype=bool)
         mask = self._apply_exclusion(mask, exclusion_rect)
@@ -71,17 +69,16 @@ class StonePlacementEngine:
         progress(50, "Kenarlar tespit edildi")
 
         weights = self._get_style_weights(style, detail_sensitivity)
-        weights.update({"fill_interior": style in {"fill", "balanced"}, "grid_snap": bool(grid_snap),
-                        "interactive_mask": None, "sprinkle": bool(sprinkle or style == "scatter"),
-                        "exclude_dark": bool(exclude_dark_stones), "dark_threshold": int(dark_stone_threshold),
-                        "edge_only": bool(edge_only or style == "edge"), "edge_threshold": int(edge_threshold)})
+        weights.update({"fill_interior": style in {"fill", "balanced"}, "grid_snap": bool(grid_snap), "interactive_mask": None,
+                        "sprinkle": bool(sprinkle or style == "scatter"), "exclude_dark": bool(exclude_dark_stones),
+                        "dark_threshold": int(dark_stone_threshold), "edge_only": bool(edge_only or style == "edge"),
+                        "edge_threshold": int(edge_threshold)})
         candidates = create_candidates(image=processed, valid_mask=mask, edge=edges, stones=selected_stones,
                                        palette=selected_palette, density=density, **weights)
         progress(65, "Aday noktalar oluşturuldu")
         candidates = self._filter_excluded_groups(candidates, excluded_stone_groups)
         candidates = adaptive_prune(candidates, density)
         progress(70, "Yoğunluk optimize edildi")
-
         image_step_mm = fabric_width_mm / max(1, processed.shape[1])
         gap_px = gap_mm / max(image_step_mm, 1e-9)
         if len(selected_stones) == 1:
@@ -90,20 +87,15 @@ class StonePlacementEngine:
         else:
             candidates = resolve_variable_collisions(assign_stones(candidates, selected_stones), image_step_mm, gap_mm)
         progress(80, "Çarpışmalar çözüldü")
-
-        placements = to_placements(points=candidates, stone=selected_stones[0], width_mm=fabric_width_mm,
-                                   height_mm=fabric_height_mm, image_width=processed.shape[1], image_height=processed.shape[0],
-                                   laser_tolerance=laser_tolerance_mm)
+        placements = to_placements(points=candidates, stone=selected_stones[0], width_mm=fabric_width_mm, height_mm=fabric_height_mm,
+                                   image_width=processed.shape[1], image_height=processed.shape[0], laser_tolerance=laser_tolerance_mm)
         progress(90, "Yerleşim hesaplandı")
-
-        prices = {stone.name: (float(stone_unit_price_tl) if stone_unit_price_tl is not None else stone.price_tl)
-                  for stone in selected_stones}
+        prices = {stone.name: (float(stone_unit_price_tl) if stone_unit_price_tl is not None else stone.price_tl) for stone in selected_stones}
         if budget_tl is not None:
             placements = optimize_budget(placements, prices[selected_stones[0].name], float(budget_tl), prices)
             progress(95, "Bütçe optimize edildi")
         if output_csv:
             export_csv(placements, output_csv)
-
         total_cost = sum(prices.get(item.stone_name, 0.0) for item in placements)
         progress(100, "Tamamlandı")
         return {"success": True, "stone_count": len(placements), "total_cost_tl": round(total_cost, 2),
