@@ -91,5 +91,71 @@ namespace StoneMaster.Corel.Services
                 return JsonService.Deserialize<EngineResponse>(responseJson);
             }
         }
+
+        public async Task<System.Collections.Generic.List<(string Name, string Hex, double Percentage)>> AnalyzeImageColorsAsync(string imagePath)
+        {
+            if (!File.Exists(_engineExe))
+                throw new FileNotFoundException("StoneMaster.Engine.exe bulunamadı.", _engineExe);
+
+            if (!File.Exists(imagePath))
+                throw new FileNotFoundException("Görsel dosyası bulunamadı.", imagePath);
+
+            var tempDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "StoneMaster", "temp");
+            Directory.CreateDirectory(tempDir);
+
+            var analysisPath = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".analysis.json");
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = _engineExe,
+                Arguments = $"analyze-colors \"{imagePath}\" \"{analysisPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = Path.GetDirectoryName(_engineExe)
+            };
+
+            using (var process = new Process { StartInfo = psi, EnableRaisingEvents = true })
+            {
+                var output = new StringBuilder();
+                process.OutputDataReceived += (_, e) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data)) output.AppendLine(e.Data);
+                };
+                process.ErrorDataReceived += (_, e) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data)) output.AppendLine("ERROR: " + e.Data);
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                await Task.Run(() => process.WaitForExit()).ConfigureAwait(false);
+
+                if (!File.Exists(analysisPath))
+                {
+                    var errorMsg = output.ToString();
+                    if (string.IsNullOrWhiteSpace(errorMsg))
+                        errorMsg = "Renk analizi yapılamadı. Engine hiçbir çıktı üretmedi.";
+                    throw new InvalidOperationException(errorMsg);
+                }
+
+                var json = File.ReadAllText(analysisPath, Encoding.UTF8);
+                var result = JsonService.Deserialize<ColorAnalysisResult>(json);
+                
+                return result.colors;
+            }
+        }
+    }
+
+    // Renk analizi sonucu için model
+    public sealed class ColorAnalysisResult
+    {
+        public System.Collections.Generic.List<(string Name, string Hex, double Percentage)> colors { get; set; }
+        public int total_colors { get; set; }
     }
 }

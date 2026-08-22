@@ -76,8 +76,21 @@
                         </ListBox>
                     </Border>
                     
-                    <TextBlock Text="Renk Paleti (çoklu seçim):" FontWeight="Bold" Margin="0,8,0,4"/>
-                    <Border BorderBrush="LightGray" BorderThickness="1" Padding="4">
+                    <TextBlock Text="Renk Paleti:" FontWeight="Bold" Margin="0,8,0,4"/>
+                    <Button Content="🎨 Taşa Dönüşmeyecek Arkaplan Rengini Seç" Click="SelectBackgroundColor_Click" Margin="0,6,0,0" ToolTip="Arkaplan rengini seçin ve fotoğrafı analiz edin"/>
+                    <Border x:Name="pnlColorAnalysis" BorderBrush="LightGray" BorderThickness="1" Padding="4" Visibility="Collapsed" Margin="0,4,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Fotoğraftaki Baskın Renkler (seçili olanlar taş olarak kullanılacak):" FontWeight="Bold" Margin="0,0,0,4" FontSize="11"/>
+                            <Border BorderBrush="LightGray" BorderThickness="1" Padding="4">
+                                <ListBox x:Name="cmbAnalyzedColors" Height="150" SelectionMode="Multiple">
+                                    <!-- Analiz edilen renkler buraya dinamik olarak eklenecek -->
+                                </ListBox>
+                            </Border>
+                            <Button Content="🔍 Fotoğrafı Analiz Et" Click="AnalyzeImage_Click" Margin="0,6,0,0" ToolTip="Fotoğraftaki baskın renkleri tespit et"/>
+                            <TextBlock x:Name="txtAnalysisStatus" Text="" Margin="0,4,0,0" FontStyle="Italic" Foreground="Green" FontSize="11"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="pnlPalette" BorderBrush="LightGray" BorderThickness="1" Padding="4">
                         <ListBox x:Name="cmbPalette" Height="120" SelectionMode="Multiple">
                             <ListBoxItem><CheckBox Content="Crystal (Şeffaf)" IsChecked="True"/></ListBoxItem>
                             <ListBoxItem><CheckBox Content="Black (Siyah)" IsChecked="True"/></ListBoxItem>
@@ -91,7 +104,6 @@
                     </Border>
                     
                     <Button Content="🎨 Fotoğraftan Renk Ekle" Click="SampleColor_Click" Margin="0,6,0,0" ToolTip="Önizlemede bir noktaya tıklayarak renk ekleyin"/>
-                    <Button Content="🚫 Hariç Tutulacak Renk Seç" Click="ExcludeColor_Click" Margin="0,4,0,0" ToolTip="Önizlemede istemediğiniz rengi seçin"/>
                     
                     <TextBlock Text="Taş Arası Boşluk (Gap - mm)" FontWeight="Bold" Margin="0,8,0,2"/>
                     <TextBox x:Name="txtGap" Text="0.50" ToolTip="Taşlar arasındaki minimum boşluk"/>

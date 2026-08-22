@@ -283,40 +283,69 @@ namespace StoneMaster.Corel.Docker
                 txtBackgroundColor.Text = Vm.BackgroundColor;
                 cmbBackgroundMode.SelectedIndex = 3; // COLOR modunu seç
                 
-                // ÖNEMLİ: Arka plan rengi seçildiğinde, bu rengi taş paletinden çıkar
-                // Böylece arka plan rengine sahip bölgelere taş yerleştirilmez
-                if (!string.IsNullOrEmpty(Vm.BackgroundColor))
+                // Arkaplan rengi seçildiğinde analiz panelini göster
+                pnlColorAnalysis.Visibility = Visibility.Visible;
+                pnlPalette.Visibility = Visibility.Collapsed;
+                
+                txtStatus.Text = $"Arkaplan rengi seçildi: {Vm.BackgroundColor}. Şimdi 'Fotoğrafı Analiz Et' butonuna tıklayın.";
+            }
+        }
+
+        private async void AnalyzeImage_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(Vm.ImagePath) || !File.Exists(Vm.ImagePath))
+            {
+                MessageBox.Show("Lütfen önce bir fotoğraf seçin.", "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                txtAnalysisStatus.Text = "🔍 Fotoğraf analiz ediliyor...";
+                cmbAnalyzedColors.Items.Clear();
+                
+                // Python engine ile renk analizi yap
+                var analyzedColors = await Vm.AnalyzeImageColorsAsync(Vm.ImagePath);
+                
+                if (analyzedColors.Count == 0)
                 {
-                    // Custom palette hex'ten arka plan rengine yakın renkleri filtrele
-                    var bgColor = System.Drawing.ColorTranslator.FromHtml(Vm.BackgroundColor);
-                    Vm.CustomPaletteHex.RemoveAll(hex => 
-                    {
-                        var paletteColor = System.Drawing.ColorTranslator.FromHtml(hex);
-                        // Eğer renk arka plan rengine çok yakınsa (tolerans: 30), listeden çıkar
-                        int diff = Math.Abs(paletteColor.R - bgColor.R) + 
-                                   Math.Abs(paletteColor.G - bgColor.G) + 
-                                   Math.Abs(paletteColor.B - bgColor.B);
-                        return diff < 90; // 30*3 = 90 tolerans
-                    });
-                    
-                    // ListBox'tan da kaldır
-                    for (int i = cmbPalette.Items.Count - 1; i >= 0; i--)
-                    {
-                        var item = cmbPalette.Items[i] as ListBoxItem;
-                        var checkBox = item?.Content as CheckBox;
-                        if (checkBox != null)
-                        {
-                            var content = checkBox.Content.ToString();
-                            // Hex renk formatını içeriğinden çıkartıp karşılaştır
-                            if (content.Contains(Vm.BackgroundColor))
-                            {
-                                cmbPalette.Items.RemoveAt(i);
-                            }
-                        }
-                    }
+                    txtAnalysisStatus.Text = "⚠️ Renk analizi yapılamadı.";
+                    return;
                 }
                 
-                txtStatus.Text = "Arka plan rengi seçildi. Bu renk taş paletinden çıkarıldı.";
+                // Her rengi ListBox'a ekle
+                foreach (var colorInfo in analyzedColors)
+                {
+                    var checkBox = new CheckBox
+                    {
+                        Content = $"{colorInfo.Name} ({colorInfo.Hex}) - %{colorInfo.Percentage:F1}",
+                        IsChecked = true // Varsayılan olarak tümünü seç
+                    };
+                    
+                    // Arkaplan rengine yakın olanları otomatik işaretleme
+                    if (!string.IsNullOrEmpty(Vm.BackgroundColor))
+                    {
+                        var bgColor = System.Drawing.ColorTranslator.FromHtml(Vm.BackgroundColor);
+                        var thisColor = System.Drawing.ColorTranslator.FromHtml(colorInfo.Hex);
+                        int diff = Math.Abs(thisColor.R - bgColor.R) + 
+                                   Math.Abs(thisColor.G - bgColor.G) + 
+                                   Math.Abs(thisColor.B - bgColor.B);
+                        
+                        if (diff < 90) // Arkaplan rengine çok yakın, işaretleme
+                        {
+                            checkBox.IsChecked = false;
+                        }
+                    }
+                    
+                    cmbAnalyzedColors.Items.Add(new ListBoxItem { Content = checkBox });
+                }
+                
+                txtAnalysisStatus.Text = $"✅ {analyzedColors.Count} renk bulundu. Taş olarak kullanılacak renkleri seçin ve 'ÖNİZLEME OLUŞTUR'a basın.";
+            }
+            catch (Exception ex)
+            {
+                txtAnalysisStatus.Text = "❌ Hata: " + ex.Message;
+                MessageBox.Show(ex.Message, "StoneMaster", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -506,10 +535,16 @@ namespace StoneMaster.Corel.Docker
             if (Vm.StoneSizes.Count == 0)
                 throw new InvalidOperationException("En az bir taş boyutunu işaretleyin.");
             
-            // ÖNEMLİ: Eğer custom_palette_hex doluysa, sadece bu renkleri kullan
-            // Boşsa palette_colors'ı kullan (eski davranış)
-            var checkedPaletteColors = GetCheckedValues(cmbPalette);
-            if (Vm.CustomPaletteHex != null && Vm.CustomPaletteHex.Count > 0)
+            // ÖNEMLİ: Eğer analiz edilmiş renkler varsa, sadece bunları kullan
+            // Yoksa custom_palette_hex veya normal palet renklerini kullan
+            var analyzedColors = GetCheckedAnalyzedColors();
+            if (analyzedColors.Count > 0)
+            {
+                // Analiz edilen ve seçili renkleri kullan
+                Vm.PaletteColors = new List<string>(); // Boş bırak, custom_palette_hex kullanılacak
+                Vm.CustomPaletteHex = analyzedColors.Select(c => c.Hex).ToList();
+            }
+            else if (Vm.CustomPaletteHex != null && Vm.CustomPaletteHex.Count > 0)
             {
                 // Custom hex renklerini kullan - palet seçimlerini yoksay
                 Vm.PaletteColors = new List<string>(); // Boş bırak, custom_palette_hex kullanılacak
@@ -517,7 +552,8 @@ namespace StoneMaster.Corel.Docker
             else
             {
                 // Normal palet renklerini kullan
-                Vm.PaletteColors = checkedPaletteColors;
+                Vm.PaletteColors = GetCheckedValues(cmbPalette);
+                Vm.CustomPaletteHex = new List<string>();
             }
             
             // Arka plan modu - ComboBox'tan seçilen metni al
@@ -570,11 +606,29 @@ namespace StoneMaster.Corel.Docker
             Vm.EdgeThreshold = 80;
         }
 
-        private void ExcludeColor_Click(object sender, RoutedEventArgs e)
+        private List<(string Name, string Hex, double Percentage)> GetCheckedAnalyzedColors()
         {
-            _sampleColorMode = true;
-            txtStatus.Text = "Hariç tutulacak rengi seçmek için önizlemede fotoğrafın üzerine tıklayın.";
+            var result = new List<(string Name, string Hex, double Percentage)>();
+            
+            foreach (var item in cmbAnalyzedColors.Items.OfType<ListBoxItem>())
+            {
+                var checkBox = item.Content as CheckBox;
+                if (checkBox != null && checkBox.IsChecked.GetValueOrDefault())
+                {
+                    var content = checkBox.Content.ToString();
+                    // Parse: "ColorName (#RRGGBB) - %XX.X"
+                    var match = System.Text.RegularExpressions.Regex.Match(content, @"(.+?)\s+\((#[0-9A-Fa-f]{6})\)\s+-\s+%([\d.]+)");
+                    if (match.Success)
+                    {
+                        result.Add((match.Groups[1].Value, match.Groups[2].Value, double.Parse(match.Groups[3].Value)));
+                    }
+                }
+            }
+            
+            return result;
         }
+
+        // ExcludeColor_Click fonksiyonu kaldırıldı - artık arkaplan rengi analizi ile kullanılıyor
 
         private void InteractiveSelect_Click(object sender, RoutedEventArgs e)
         {
