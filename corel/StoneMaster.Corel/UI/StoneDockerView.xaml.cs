@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using Microsoft.Win32;
+using StoneMaster.Corel.Models;
 
 namespace StoneMaster.Corel.UI
 {
@@ -57,11 +62,7 @@ namespace StoneMaster.Corel.UI
 
         private void Browse_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Görseller|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff|Tüm dosyalar|*.*",
-                Multiselect = false
-            };
+            var dialog = new OpenFileDialog { Filter = "Görseller|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff|Tüm dosyalar|*.*", Multiselect = false };
             if (dialog.ShowDialog() != true) return;
             try
             {
@@ -87,9 +88,7 @@ namespace StoneMaster.Corel.UI
                 EnsureImage();
                 SetBusy(true, "Renkler analiz ediliyor...");
                 var colors = await _viewModel.AnalyzeImageColorsAsync(_viewModel.ImagePath);
-                StatusText.Text = colors.Count == 0
-                    ? "Renk analizi sonuç üretmedi."
-                    : "Baskın renkler: " + string.Join(", ", colors.Take(6).Select(c => $"{c.Name} {c.Percentage:0.0}%"));
+                StatusText.Text = colors.Count == 0 ? "Renk analizi sonuç üretmedi." : "Baskın renkler: " + string.Join(", ", colors.Take(6).Select(c => $"{c.Name} {c.Percentage:0.0}%"));
             }
             catch (Exception ex) { ShowError(ex); }
             finally { SetBusy(false); }
@@ -104,6 +103,7 @@ namespace StoneMaster.Corel.UI
                 EnsureImage();
                 SetBusy(true, "Önizleme hesaplanıyor...");
                 var response = await _viewModel.PreviewAsync(new Progress<string>(message => StatusText.Text = message));
+                RenderPreview(response);
                 StatusText.Text = $"Önizleme hazır · {response.stone_count:N0} taş · {response.total_cost_tl:N2} TL · {response.used_colors} renk";
             }
             catch (Exception ex) { ShowError(ex); }
@@ -119,23 +119,71 @@ namespace StoneMaster.Corel.UI
                 EnsureImage();
                 if (_viewModel.LastResponse == null)
                     throw new InvalidOperationException("Önce Önizleme Oluştur ile sonucu doğrulayın.");
-
                 MainPlugin.Corel.ApplyGeneration(_viewModel.LastResponse, _viewModel.CurrentBitmapContext, true, true, true);
                 StatusText.Text = "CorelDRAW'a STONE_PREVIEW ve LAZER_KALIP_KESIM katmanları aktarıldı.";
             }
             catch (Exception ex) { ShowError(ex); }
         }
 
+        private void RenderPreview(EngineResponse response)
+        {
+            PreviewCanvas.Children.Clear();
+            PreviewSummary.Text = response == null ? "Sonuç yok" : $"{response.stone_count:N0} taş · {response.used_colors} renk · {response.total_cost_tl:N2} TL";
+            if (response == null || response.width_mm <= 0 || response.height_mm <= 0) return;
+
+            const double maxWidth = 360.0;
+            const double maxHeight = 250.0;
+            var scale = Math.Min(maxWidth / response.width_mm, maxHeight / response.height_mm);
+            var canvasWidth = response.width_mm * scale;
+            var canvasHeight = response.height_mm * scale;
+            PreviewCanvas.Width = canvasWidth;
+            PreviewCanvas.Height = canvasHeight;
+            PreviewSurface.Width = canvasWidth;
+            PreviewSurface.Height = canvasHeight;
+
+            PreviewImage.Visibility = Visibility.Collapsed;
+            if (!string.IsNullOrWhiteSpace(_viewModel.ImagePath) && File.Exists(_viewModel.ImagePath))
+            {
+                try
+                {
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(_viewModel.ImagePath, UriKind.Absolute);
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                    PreviewImage.Source = bitmap;
+                    PreviewImage.Width = canvasWidth;
+                    PreviewImage.Height = canvasHeight;
+                    PreviewImage.Visibility = Visibility.Visible;
+                }
+                catch { PreviewImage.Visibility = Visibility.Collapsed; }
+            }
+
+            foreach (var stone in response.stones)
+            {
+                var diameter = Math.Max(2.0, stone.DiameterMm * scale);
+                var ellipse = new Ellipse
+                {
+                    Width = diameter,
+                    Height = diameter,
+                    Fill = TryCreateBrush(stone.HexColor),
+                    Stroke = Brushes.Black,
+                    StrokeThickness = 0.35,
+                    ToolTip = $"{stone.StoneName} · {stone.ColorName}\nX {stone.XMm:0.0} mm · Y {stone.YMm:0.0} mm"
+                };
+                Canvas.SetLeft(ellipse, stone.XMm * scale - diameter / 2.0);
+                Canvas.SetTop(ellipse, stone.YMm * scale - diameter / 2.0);
+                PreviewCanvas.Children.Add(ellipse);
+            }
+        }
+
         private void ApplyUiToViewModel()
         {
-            var selectedSizes = StoneSizeList.Items
-                .OfType<ListBoxItem>()
+            var selectedSizes = StoneSizeList.Items.OfType<ListBoxItem>()
                 .Select(item => item.Content as CheckBox)
                 .Where(check => check?.IsChecked == true)
-                .Select(check => check.Tag.ToString())
-                .ToList();
-            if (selectedSizes.Count == 0)
-                selectedSizes.Add("SS10");
+                .Select(check => check.Tag.ToString()).ToList();
+            if (selectedSizes.Count == 0) selectedSizes.Add("SS10");
 
             _viewModel.StoneSizes = selectedSizes;
             _viewModel.StoneSize = selectedSizes[0];
@@ -145,6 +193,7 @@ namespace StoneMaster.Corel.UI
             _viewModel.EdgeSensitivity = EdgeSlider.Value;
             _viewModel.DetailSensitivity = DetailSlider.Value;
             _viewModel.BackgroundMode = (BackgroundModeBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "AUTO";
+            _viewModel.BackgroundColor = BackgroundColorBox.Text.Trim();
             _viewModel.BackgroundTolerance = ParseDouble(BackgroundToleranceBox.Text, "Arka plan toleransı");
             _viewModel.GridSnap = GridSnapBox.IsChecked == true;
             _viewModel.ExcludeDarkStones = ExcludeDarkBox.IsChecked == true;
@@ -155,6 +204,12 @@ namespace StoneMaster.Corel.UI
             _viewModel.BudgetTl = ParseDouble(BudgetBox.Text, "Hedef bütçe");
             _viewModel.StoneUnitPriceTl = string.IsNullOrWhiteSpace(UnitPriceBox.Text) ? (double?)null : ParseDouble(UnitPriceBox.Text, "Birim fiyat");
             _viewModel.PaletteColors = PalettePanel.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => c.Tag.ToString()).ToList();
+        }
+
+        private static SolidColorBrush TryCreateBrush(string hex)
+        {
+            try { return (SolidColorBrush)new BrushConverter().ConvertFromString(hex); }
+            catch { return Brushes.DimGray; }
         }
 
         private static double ParseDouble(string text, string field)
