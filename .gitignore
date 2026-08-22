@@ -1,1 +1,33 @@
-Nothing should be ignored based on the provided file changes. The only modified file is a source code file (.cs), which should not be added to .gitignore.
+# IDE / editor
+.vs/
+.vscode/*.code-workspace
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# .NET build output
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Python engine build output
+engine/build/
+engine/dist/
+engine/*.spec
+
+# Local runtime data
+*.response.json
+*.analysis.json
+
+# Logs and diagnostics
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
