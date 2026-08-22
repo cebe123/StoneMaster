@@ -1,20 +1,23 @@
-from dataclasses import dataclass, asdict
-from typing import List, Optional
+from dataclasses import asdict, dataclass
+from typing import Tuple
 
-@dataclass
+
+@dataclass(frozen=True)
 class StoneDef:
     id: str
     name: str
     diameter_mm: float
     price_tl: float
 
-@dataclass
+
+@dataclass(frozen=True)
 class PaletteColor:
     name: str
     hex: str
-    rgb: tuple[int, int, int]
+    rgb: Tuple[int, int, int]
 
-@dataclass
+
+@dataclass(frozen=True)
 class StonePlacement:
     x_mm: float
     y_mm: float
