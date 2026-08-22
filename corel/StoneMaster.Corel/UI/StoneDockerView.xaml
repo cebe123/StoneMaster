@@ -1,7 +1,7 @@
 <UserControl x:Class="StoneMaster.Corel.UI.StoneDockerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             MinWidth="360" MinHeight="640" Background="#17191D">
+             MinWidth="380" MinHeight="720" Background="#17191D">
     <UserControl.Resources>
         <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#E8EAED"/><Setter Property="FontSize" Value="12"/></Style>
         <Style TargetType="GroupBox"><Setter Property="Foreground" Value="#E8EAED"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="Padding" Value="10"/></Style>
@@ -13,7 +13,6 @@
 
     <Grid Margin="12">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="STONEMASTER" FontSize="20" FontWeight="SemiBold"/>
             <TextBlock Text="Industrial Rhinestone Workflow" Foreground="#9AA0A6" Margin="0,2,0,0"/>
@@ -56,6 +55,7 @@
                         <TextBlock Text="Kenar hassasiyeti"/><Slider x:Name="EdgeSlider" Minimum="0" Maximum="1" Value="0.5" TickFrequency="0.05"/>
                         <TextBlock Text="Detay hassasiyeti"/><Slider x:Name="DetailSlider" Minimum="0" Maximum="1" Value="0.5" TickFrequency="0.05"/>
                         <TextBlock Text="Arka plan modu"/><ComboBox x:Name="BackgroundModeBox"><ComboBoxItem Content="AUTO"/><ComboBoxItem Content="LIGHT"/><ComboBoxItem Content="DARK"/><ComboBoxItem Content="COLOR"/></ComboBox>
+                        <TextBlock Text="Arka plan rengi (#RRGGBB)"/><TextBox x:Name="BackgroundColorBox" Text="#F5F5F5"/>
                         <TextBlock Text="Arka plan toleransı"/><TextBox x:Name="BackgroundToleranceBox" Text="28"/>
                         <CheckBox x:Name="GridSnapBox" Content="Hizalı / grid yerleşim"/><CheckBox x:Name="ExcludeDarkBox" Content="Koyu taşları hariç tut"/><CheckBox x:Name="EdgeOnlyBox" Content="Yalnızca kenarlara yerleştir"/><CheckBox x:Name="SprinkleBox" Content="Serpme / doğal dağılım"/>
                     </StackPanel>
@@ -66,6 +66,20 @@
                         <StackPanel Margin="0,0,8,0"><TextBlock Text="Hedef bütçe (TL)"/><TextBox x:Name="BudgetBox" Text="200"/></StackPanel>
                         <StackPanel Grid.Column="1"><TextBlock Text="Birim fiyat (TL) · opsiyonel"/><TextBox x:Name="UnitPriceBox"/></StackPanel>
                     </Grid>
+                </GroupBox>
+
+                <GroupBox Header="4 · ÖNİZLEME">
+                    <StackPanel>
+                        <Border BorderBrush="#3B4048" BorderThickness="1" Background="#0F1114" Height="280">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                <Grid x:Name="PreviewSurface" Width="360" Height="250">
+                                    <Image x:Name="PreviewImage" Stretch="Fill" Opacity="0.25"/>
+                                    <Canvas x:Name="PreviewCanvas" Width="360" Height="250" Background="Transparent"/>
+                                </Grid>
+                            </ScrollViewer>
+                        </Border>
+                        <TextBlock x:Name="PreviewSummary" Text="Henüz sonuç yok" Foreground="#9AA0A6" Margin="0,6,0,0"/>
+                    </StackPanel>
                 </GroupBox>
             </StackPanel>
         </ScrollViewer>
