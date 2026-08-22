@@ -336,7 +336,13 @@ def kumas_tas_kalip_uretec(
     """Eski API - geriye dönük uyumluluk için."""
     # Yeni API'ye çevir
     stone_sizes = tas_boyutlari or [tas_boyutu]
-    colors = palet_renkleri or []
+    
+    # Renk paleti mantığı: Eğer custom_palette_hex varsa onu kullan, yoksa palet_renkleri'ni kullan
+    # custom_palette_hex boş değilse, sadece bu hex renklerini kullan (palet seçimlerini yoksay)
+    if custom_palette_hex and len(custom_palette_hex) > 0:
+        colors = custom_palette_hex
+    else:
+        colors = palet_renkleri or []
     
     # Stil belirleme
     if edge_only:

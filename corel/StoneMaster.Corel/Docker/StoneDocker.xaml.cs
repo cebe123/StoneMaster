@@ -281,8 +281,42 @@ namespace StoneMaster.Corel.Docker
                 var color = dialog.Color;
                 Vm.BackgroundColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
                 txtBackgroundColor.Text = Vm.BackgroundColor;
-                cmbBackgroundMode.SelectedIndex = 3;
-                txtStatus.Text = "Arka plan rengi seçildi.";
+                cmbBackgroundMode.SelectedIndex = 3; // COLOR modunu seç
+                
+                // ÖNEMLİ: Arka plan rengi seçildiğinde, bu rengi taş paletinden çıkar
+                // Böylece arka plan rengine sahip bölgelere taş yerleştirilmez
+                if (!string.IsNullOrEmpty(Vm.BackgroundColor))
+                {
+                    // Custom palette hex'ten arka plan rengine yakın renkleri filtrele
+                    var bgColor = System.Drawing.ColorTranslator.FromHtml(Vm.BackgroundColor);
+                    Vm.CustomPaletteHex.RemoveAll(hex => 
+                    {
+                        var paletteColor = System.Drawing.ColorTranslator.FromHtml(hex);
+                        // Eğer renk arka plan rengine çok yakınsa (tolerans: 30), listeden çıkar
+                        int diff = Math.Abs(paletteColor.R - bgColor.R) + 
+                                   Math.Abs(paletteColor.G - bgColor.G) + 
+                                   Math.Abs(paletteColor.B - bgColor.B);
+                        return diff < 90; // 30*3 = 90 tolerans
+                    });
+                    
+                    // ListBox'tan da kaldır
+                    for (int i = cmbPalette.Items.Count - 1; i >= 0; i--)
+                    {
+                        var item = cmbPalette.Items[i] as ListBoxItem;
+                        var checkBox = item?.Content as CheckBox;
+                        if (checkBox != null)
+                        {
+                            var content = checkBox.Content.ToString();
+                            // Hex renk formatını içeriğinden çıkartıp karşılaştır
+                            if (content.Contains(Vm.BackgroundColor))
+                            {
+                                cmbPalette.Items.RemoveAt(i);
+                            }
+                        }
+                    }
+                }
+                
+                txtStatus.Text = "Arka plan rengi seçildi. Bu renk taş paletinden çıkarıldı.";
             }
         }
 
@@ -336,8 +370,23 @@ namespace StoneMaster.Corel.Docker
                 var color = bitmap.GetPixel(x, y);
                 var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
                 
-                // Hariç tutma modunda
-                if (_excludeSelectedMode)
+                // Arka plan rengine yakın renkleri kontrol et
+                var isBackgroundColor = false;
+                if (!string.IsNullOrEmpty(Vm.BackgroundColor))
+                {
+                    var bgColor = System.Drawing.ColorTranslator.FromHtml(Vm.BackgroundColor);
+                    var clickedColor = color;
+                    int diff = Math.Abs(clickedColor.R - bgColor.R) + 
+                               Math.Abs(clickedColor.G - bgColor.G) + 
+                               Math.Abs(clickedColor.B - bgColor.B);
+                    if (diff < 90) // Tolerans
+                    {
+                        isBackgroundColor = true;
+                    }
+                }
+                
+                // Hariç tutma modunda veya arka plan rengi seçilmişse
+                if (_excludeSelectedMode || isBackgroundColor)
                 {
                     // Bu rengi paletten çıkar
                     for (int i = cmbPalette.Items.Count - 1; i >= 0; i--)
@@ -347,10 +396,18 @@ namespace StoneMaster.Corel.Docker
                         if (checkBox != null && checkBox.Content.ToString().Contains(hex))
                         {
                             cmbPalette.Items.RemoveAt(i);
-                            break;
                         }
                     }
-                    txtStatus.Text = $"Renk hariç tutuldu: {hex}";
+                    Vm.CustomPaletteHex.RemoveAll(h => h == hex);
+                    
+                    if (isBackgroundColor)
+                    {
+                        txtStatus.Text = $"Arka plan rengi ({hex}) otomatik olarak hariç tutuldu.";
+                    }
+                    else
+                    {
+                        txtStatus.Text = $"Renk hariç tutuldu: {hex}";
+                    }
                 }
                 else
                 {
@@ -362,8 +419,12 @@ namespace StoneMaster.Corel.Docker
                         {
                             Content = new CheckBox { Content = hex, IsChecked = true }
                         });
+                        txtStatus.Text = $"Renk eklendi: {hex}";
                     }
-                    txtStatus.Text = $"Renk eklendi: {hex}";
+                    else
+                    {
+                        txtStatus.Text = $"Bu renk zaten seçili: {hex}";
+                    }
                 }
             }
             _sampleColorMode = false;
@@ -444,7 +505,20 @@ namespace StoneMaster.Corel.Docker
             Vm.StoneSizes = GetCheckedValues(cmbStoneSizes);
             if (Vm.StoneSizes.Count == 0)
                 throw new InvalidOperationException("En az bir taş boyutunu işaretleyin.");
-            Vm.PaletteColors = GetCheckedValues(cmbPalette);
+            
+            // ÖNEMLİ: Eğer custom_palette_hex doluysa, sadece bu renkleri kullan
+            // Boşsa palette_colors'ı kullan (eski davranış)
+            var checkedPaletteColors = GetCheckedValues(cmbPalette);
+            if (Vm.CustomPaletteHex != null && Vm.CustomPaletteHex.Count > 0)
+            {
+                // Custom hex renklerini kullan - palet seçimlerini yoksay
+                Vm.PaletteColors = new List<string>(); // Boş bırak, custom_palette_hex kullanılacak
+            }
+            else
+            {
+                // Normal palet renklerini kullan
+                Vm.PaletteColors = checkedPaletteColors;
+            }
             
             // Arka plan modu - ComboBox'tan seçilen metni al
             var bgModeItem = cmbBackgroundMode.SelectedItem as System.Windows.Controls.ComboBoxItem;
