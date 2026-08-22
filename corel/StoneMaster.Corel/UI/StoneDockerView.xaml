@@ -3,102 +3,47 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinWidth="360" MinHeight="640" Background="#17191D">
     <UserControl.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#E8EAED"/>
-            <Setter Property="FontSize" Value="12"/>
-        </Style>
-        <Style TargetType="GroupBox">
-            <Setter Property="Foreground" Value="#E8EAED"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
-            <Setter Property="Padding" Value="10"/>
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Margin" Value="0,4,6,4"/>
-            <Setter Property="Padding" Value="12,7"/>
-            <Setter Property="MinHeight" Value="32"/>
-        </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="Margin" Value="0,3,0,8"/>
-            <Setter Property="MinHeight" Value="30"/>
-        </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Margin" Value="0,3,0,8"/>
-            <Setter Property="MinHeight" Value="28"/>
-        </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Margin" Value="0,4,0,4"/>
-        </Style>
+        <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#E8EAED"/><Setter Property="FontSize" Value="12"/></Style>
+        <Style TargetType="GroupBox"><Setter Property="Foreground" Value="#E8EAED"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="Padding" Value="10"/></Style>
+        <Style TargetType="Button"><Setter Property="Margin" Value="0,4,6,4"/><Setter Property="Padding" Value="12,7"/><Setter Property="MinHeight" Value="32"/></Style>
+        <Style TargetType="ComboBox"><Setter Property="Margin" Value="0,3,0,8"/><Setter Property="MinHeight" Value="30"/></Style>
+        <Style TargetType="TextBox"><Setter Property="Margin" Value="0,3,0,8"/><Setter Property="MinHeight" Value="28"/></Style>
+        <Style TargetType="CheckBox"><Setter Property="Margin" Value="0,4,0,4"/></Style>
     </UserControl.Resources>
 
     <Grid Margin="12">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="STONEMASTER" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock Text="Rhinestone Design &amp; Laser Template" Foreground="#9AA0A6" Margin="0,2,0,0"/>
+            <TextBlock Text="Industrial Rhinestone Workflow" Foreground="#9AA0A6" Margin="0,2,0,0"/>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <GroupBox Header="1 · KAYNAK">
                     <StackPanel>
-                        <TextBlock Text="Aktif CorelDRAW bitmap'i otomatik kullanılır." Foreground="#9AA0A6" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <TextBlock Text="CorelDRAW'daki bitmap'i kullanın veya görseli çalışma alanına aktarın." Foreground="#9AA0A6" TextWrapping="Wrap" Margin="0,0,0,6"/>
                         <TextBox x:Name="ImagePathBox" IsReadOnly="True"/>
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="Corel bitmap'i kullan" Click="UseSelection_Click"/>
-                            <Button Content="Dosya seç" Click="Browse_Click"/>
-                        </StackPanel>
+                        <StackPanel Orientation="Horizontal"><Button Content="Corel bitmap'i kullan" Click="UseSelection_Click"/><Button Content="Dosya seç" Click="Browse_Click"/></StackPanel>
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="2 · TASARIM">
+                <GroupBox Header="2 · MOD VE KALIP">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                            <TextBlock Text="Çalışma modu"/>
-                            <ComboBox x:Name="ModeBox" SelectionChanged="Mode_Changed">
-                                <ComboBoxItem Content="FULL"/>
-                                <ComboBoxItem Content="FILL"/>
-                                <ComboBoxItem Content="EDGE"/>
-                                <ComboBoxItem Content="SCATTER"/>
-                                <ComboBoxItem Content="BUDGET"/>
-                            </ComboBox>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Taş boyutu"/>
-                            <ComboBox x:Name="StoneSizeBox"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0">
-                            <TextBlock Text="Genişlik (mm)"/>
-                            <TextBox x:Name="WidthBox" Text="1000"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="1">
-                            <TextBlock Text="Yükseklik (mm) · boş = oran"/>
-                            <TextBox x:Name="HeightBox"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Grid.ColumnSpan="2">
-                            <TextBlock Text="Yoğunluk"/>
-                            <Slider x:Name="DensitySlider" Minimum="0.05" Maximum="1" Value="0.65" TickFrequency="0.05" IsSnapToTickEnabled="True"/>
-                            <TextBlock x:Name="DensityLabel" Text="0.65" Foreground="#9AA0A6"/>
-                        </StackPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0"><TextBlock Text="Çalışma modu"/><ComboBox x:Name="ModeBox" SelectionChanged="Mode_Changed"><ComboBoxItem Content="FULL"/><ComboBoxItem Content="FILL"/><ComboBoxItem Content="EDGE"/><ComboBoxItem Content="SCATTER"/><ComboBoxItem Content="BUDGET"/></ComboBox></StackPanel>
+                        <StackPanel Grid.Column="1"><TextBlock Text="Taş boyutları · çoklu seçim"/><ListBox x:Name="StoneSizeList" Height="100"><ListBoxItem><CheckBox Content="SS6 · 2.0 mm" Tag="SS6"/></ListBoxItem><ListBoxItem><CheckBox Content="SS8 · 2.4 mm" Tag="SS8"/></ListBoxItem><ListBoxItem><CheckBox Content="SS10 · 2.8 mm" Tag="SS10" IsChecked="True"/></ListBoxItem><ListBoxItem><CheckBox Content="SS12 · 3.2 mm" Tag="SS12"/></ListBoxItem><ListBoxItem><CheckBox Content="SS16 · 4.0 mm" Tag="SS16"/></ListBoxItem><ListBoxItem><CheckBox Content="SS20 · 5.0 mm" Tag="SS20"/></ListBoxItem><ListBoxItem><CheckBox Content="SS30 · 6.4 mm" Tag="SS30"/></ListBoxItem><ListBoxItem><CheckBox Content="SS34 · 7.2 mm" Tag="SS34"/></ListBoxItem></ListBox></StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0"><TextBlock Text="Genişlik (mm)"/><TextBox x:Name="WidthBox" Text="500"/></StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1"><TextBlock Text="Yükseklik (mm) · boş = oran"/><TextBox x:Name="HeightBox"/></StackPanel>
+                        <StackPanel Grid.Row="2" Grid.ColumnSpan="2"><TextBlock Text="Yoğunluk"/><Slider x:Name="DensitySlider" Minimum="0.05" Maximum="1" Value="0.65" TickFrequency="0.05" IsSnapToTickEnabled="True"/><TextBlock x:Name="DensityLabel" Text="0.65" Foreground="#9AA0A6"/></StackPanel>
                     </Grid>
                 </GroupBox>
 
                 <GroupBox Header="3 · RENK PALETİ">
                     <StackPanel>
-                        <TextBlock Text="Renk analizi öneri üretir; seçili palet sonucu sınırlar." Foreground="#9AA0A6" TextWrapping="Wrap"/>
+                        <TextBlock Text="İşaretli renkler kullanılabilir taş paletini sınırlar." Foreground="#9AA0A6" TextWrapping="Wrap"/>
                         <WrapPanel x:Name="PalettePanel" Margin="0,6,0,2"/>
                         <Button Content="Görsel renklerini analiz et" Click="AnalyzeColors_Click"/>
                     </StackPanel>
@@ -106,44 +51,20 @@
 
                 <Expander Header="GELİŞMİŞ AYARLAR" IsExpanded="False" Margin="0,0,0,10">
                     <StackPanel Margin="8">
-                        <TextBlock Text="Taş aralığı / gap (mm)"/>
-                        <TextBox x:Name="GapBox" Text="0.5"/>
-                        <TextBlock Text="Lazer toleransı (mm)"/>
-                        <TextBox x:Name="LaserToleranceBox" Text="0.3"/>
-                        <TextBlock Text="Kenar hassasiyeti"/>
-                        <Slider x:Name="EdgeSlider" Minimum="0" Maximum="1" Value="0.5" TickFrequency="0.05"/>
-                        <TextBlock Text="Detay hassasiyeti"/>
-                        <Slider x:Name="DetailSlider" Minimum="0" Maximum="1" Value="0.5" TickFrequency="0.05"/>
-                        <TextBlock Text="Arka plan"/>
-                        <ComboBox x:Name="BackgroundModeBox">
-                            <ComboBoxItem Content="AUTO"/>
-                            <ComboBoxItem Content="LIGHT"/>
-                            <ComboBoxItem Content="DARK"/>
-                            <ComboBoxItem Content="COLOR"/>
-                        </ComboBox>
-                        <TextBlock Text="Arka plan toleransı"/>
-                        <TextBox x:Name="BackgroundToleranceBox" Text="28"/>
-                        <CheckBox x:Name="GridSnapBox" Content="Hizalı / grid yerleşim"/>
-                        <CheckBox x:Name="ExcludeDarkBox" Content="Koyu taşları hariç tut"/>
-                        <CheckBox x:Name="EdgeOnlyBox" Content="Yalnızca kenarlara yerleştir"/>
-                        <CheckBox x:Name="SprinkleBox" Content="Serpme / doğal dağılım"/>
+                        <TextBlock Text="Taşlar arası minimum boşluk (mm)"/><TextBox x:Name="GapBox" Text="0.5"/>
+                        <TextBlock Text="Lazer toleransı (mm)"/><TextBox x:Name="LaserToleranceBox" Text="0.3"/>
+                        <TextBlock Text="Kenar hassasiyeti"/><Slider x:Name="EdgeSlider" Minimum="0" Maximum="1" Value="0.5" TickFrequency="0.05"/>
+                        <TextBlock Text="Detay hassasiyeti"/><Slider x:Name="DetailSlider" Minimum="0" Maximum="1" Value="0.5" TickFrequency="0.05"/>
+                        <TextBlock Text="Arka plan modu"/><ComboBox x:Name="BackgroundModeBox"><ComboBoxItem Content="AUTO"/><ComboBoxItem Content="LIGHT"/><ComboBoxItem Content="DARK"/><ComboBoxItem Content="COLOR"/></ComboBox>
+                        <TextBlock Text="Arka plan toleransı"/><TextBox x:Name="BackgroundToleranceBox" Text="28"/>
+                        <CheckBox x:Name="GridSnapBox" Content="Hizalı / grid yerleşim"/><CheckBox x:Name="ExcludeDarkBox" Content="Koyu taşları hariç tut"/><CheckBox x:Name="EdgeOnlyBox" Content="Yalnızca kenarlara yerleştir"/><CheckBox x:Name="SprinkleBox" Content="Serpme / doğal dağılım"/>
                     </StackPanel>
                 </Expander>
 
                 <GroupBox Header="BÜTÇE">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,8,0">
-                            <TextBlock Text="Hedef bütçe (TL)"/>
-                            <TextBox x:Name="BudgetBox" Text="200"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="Birim fiyat (TL) · opsiyonel"/>
-                            <TextBox x:Name="UnitPriceBox"/>
-                        </StackPanel>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,8,0"><TextBlock Text="Hedef bütçe (TL)"/><TextBox x:Name="BudgetBox" Text="200"/></StackPanel>
+                        <StackPanel Grid.Column="1"><TextBlock Text="Birim fiyat (TL) · opsiyonel"/><TextBox x:Name="UnitPriceBox"/></StackPanel>
                     </Grid>
                 </GroupBox>
             </StackPanel>
@@ -152,14 +73,7 @@
         <StackPanel Grid.Row="2">
             <ProgressBar x:Name="ProgressBar" Height="5" Minimum="0" Maximum="100" Margin="0,4,0,6"/>
             <TextBlock x:Name="StatusText" Text="Hazır" Foreground="#9AA0A6" TextWrapping="Wrap" Margin="0,0,0,6"/>
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="ÖNİZLEME OLUŞTUR" Click="Preview_Click" FontWeight="SemiBold"/>
-                <Button Grid.Column="1" Content="COREL'E AKTAR" Click="Generate_Click" FontWeight="SemiBold"/>
-            </Grid>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button Grid.Column="0" Content="ÖNİZLEME OLUŞTUR" Click="Preview_Click" FontWeight="SemiBold"/><Button Grid.Column="1" Content="COREL'E AKTAR" Click="Generate_Click" FontWeight="SemiBold"/></Grid>
         </StackPanel>
     </Grid>
 </UserControl>
