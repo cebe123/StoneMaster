@@ -18,15 +18,9 @@ def make_image():
 
 
 def test_basic_generation():
-    result = kumas_tas_kalip_uretec(
-        str(make_image()),
-        kumas_genislik_mm=1000,
-        kumas_yukseklik_mm=700,
-        tas_boyutu="SS10",
-        yogunluk=0.5,
-        arka_plan_esigi=245,
-        palet_renkleri=["Crystal", "Black", "Red", "Green"],
-    )
+    result = kumas_tas_kalip_uretec(str(make_image()), kumas_genislik_mm=1000, kumas_yukseklik_mm=700,
+                                    tas_boyutu="SS10", yogunluk=0.5, arka_plan_esigi=245,
+                                    palet_renkleri=["Crystal", "Black", "Red", "Green"])
     assert result["success"] is True
     assert result["stone_count"] > 0
     assert result["width_mm"] == 1000
@@ -34,13 +28,8 @@ def test_basic_generation():
 
 
 def test_custom_palette_is_used():
-    result = kumas_tas_kalip_uretec(
-        str(make_image()),
-        kumas_genislik_mm=500,
-        tas_boyutu="SS10",
-        yogunluk=0.4,
-        custom_palette_hex=["#FF0000", "#00FF00"],
-    )
+    result = kumas_tas_kalip_uretec(str(make_image()), kumas_genislik_mm=500, tas_boyutu="SS10", yogunluk=0.4,
+                                    custom_palette_hex=["#FF0000", "#00FF00"])
     assert result["success"] is True
     assert result["stone_count"] > 0
     assert {stone["hex_color"] for stone in result["stones"]}.issubset({"#FF0000", "#00FF00"})
@@ -52,15 +41,17 @@ def test_invalid_density_fails_fast():
 
 
 def test_multi_size_generation_has_valid_sizes():
-    result = kumas_tas_kalip_uretec(
-        str(make_image()),
-        kumas_genislik_mm=500,
-        tas_boyutlari=["SS6", "SS10", "SS16"],
-        yogunluk=0.45,
-    )
+    result = kumas_tas_kalip_uretec(str(make_image()), kumas_genislik_mm=500, tas_boyutlari=["SS6", "SS10", "SS16"], yogunluk=0.45)
     assert result["success"] is True
     assert result["stone_count"] > 0
     assert {stone["stone_name"] for stone in result["stones"]}.issubset({"SS6", "SS10", "SS16"})
+
+
+def test_unit_price_override():
+    result = kumas_tas_kalip_uretec(str(make_image()), kumas_genislik_mm=500, tas_boyutu="SS10", yogunluk=0.35,
+                                    tas_birim_maliyeti_tl=1.25)
+    assert result["success"] is True
+    assert result["total_cost_tl"] == round(result["stone_count"] * 1.25, 2)
 
 
 def test_laser_diameter():
