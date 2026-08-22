@@ -188,5 +188,10 @@ namespace StoneMaster.Corel.UI
         public event PropertyChangedEventHandler PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        public async Task<List<(string Name, string Hex, double Percentage)>> AnalyzeImageColorsAsync(string imagePath)
+        {
+            return await _engine.AnalyzeImageColorsAsync(imagePath);
+        }
     }
 }
