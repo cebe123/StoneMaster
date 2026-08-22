@@ -72,6 +72,7 @@ namespace StoneMaster.Corel.UI
         public int AnalysisMaxDimension { get; set; }
         public string Status { get; private set; }
         public EngineResponse LastResponse { get; private set; }
+        public List<double> ExclusionRect { get; private set; }
 
         public async Task<EngineResponse> PreviewAsync(IProgress<string> progress)
         {
@@ -108,8 +109,20 @@ namespace StoneMaster.Corel.UI
         {
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Görsel yolu boş olamaz.", nameof(path));
+
             ImagePath = path;
+            try
+            {
+                if (_corel.IsReady)
+                {
+                    var context = _corel.GetSelectedBitmapContext();
+                    if (context != null && string.Equals(context.ImagePath, path, StringComparison.OrdinalIgnoreCase))
+                        CurrentBitmapContext = context;
+                }
+            }
+            catch { /* External file sources do not have Corel geometry. */ }
             OnPropertyChanged(nameof(ImagePath));
+            OnPropertyChanged(nameof(CurrentBitmapContext));
         }
 
         public void SetBitmapContext(BitmapContext context)
@@ -133,8 +146,6 @@ namespace StoneMaster.Corel.UI
                 throw new ArgumentException("ExclusionRect [x,y,w,h] 0..1 aralığında olmalıdır.", nameof(rect));
             ExclusionRect = rect;
         }
-
-        public List<double> ExclusionRect { get; private set; }
 
         public void ExcludeStoneGroup(string stoneName, string colorName)
         {
