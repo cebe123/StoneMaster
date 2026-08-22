@@ -1,304 +1,339 @@
-"""
-StoneMaster Engine - Rhinestone Placement System
-Endüstriyel Standart Görüntü İşleme ve Taş Yerleştirme Motoru
+"""StoneMaster image-to-rhinestone placement engine.
 
-Temel Özellikler:
-- Otomatik desen tanıma (kenar, detay, renk)
-- Akıllı taş yerleştirme (çarpışma önleme)
-- Çoklu taş boyutu desteği
-- Renk paleti eşleştirme (Lab color space)
-- Lazer kalıp üretimi
-- Bütçe optimizasyonu
-
-Kullanım:
-    Basit Mod:
-        result = engine.process_image("desen.jpg", fabric_width_mm=1000)
-    
-    Gelişmiş Mod:
-        result = engine.process_image(
-            "desen.jpg",
-            stone_sizes=["SS10", "SS16"],
-            colors=["Crystal", "Black"],
-            style="balanced",  # balanced, edge, fill, scatter
-            density=0.7,
-            gap_mm=0.5
-        )
+The engine keeps the legacy Turkish API for compatibility while exposing a
+validated, deterministic processing pipeline for the CorelDRAW integration.
 """
 
 from pathlib import Path
-import json
-import numpy as np
-from typing import List, Optional, Dict, Any, Union
+import math
+import re
+from typing import Any, Dict, List, Optional, Sequence
 
-from .config import load_stones, load_palette
-from .image_loader import load_image, fit_max_dimension
-from .preprocessing import preprocess, background_mask
+import numpy as np
+
+from .config import load_palette, load_stones
+from .image_loader import fit_max_dimension, load_image
+from .preprocessing import background_mask, preprocess
 from .edge_detection import edge_map
-from .stone_placement import create_candidates, adaptive_prune, resolve_collisions, resolve_variable_collisions, assign_stones, to_placements
+from .stone_placement import (
+    adaptive_prune,
+    assign_stones,
+    create_candidates,
+    resolve_collisions,
+    resolve_variable_collisions,
+    to_placements,
+)
 from .budget_optimizer import optimize_budget
 from .export import export_csv
+from .models import PaletteColor
+
+
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
 class StonePlacementEngine:
-    """
-    Ana taş yerleştirme motoru.
-    
-    Örnek Kullanım:
-        engine = StonePlacementEngine()
-        result = engine.process(
-            image_path="design.jpg",
-            fabric_width_mm=1000,
-            stone_sizes=["SS10"],
-            colors=["Crystal", "Black"],
-            style="balanced"
-        )
-        
-        print(f"Taş sayısı: {result['stone_count']}")
-        print(f"Maliyet: {result['total_cost_tl']} TL")
-    """
-    
+    """Production placement engine used by the CorelDRAW add-in."""
+
+    SUPPORTED_STYLES = {"balanced", "edge", "fill", "scatter"}
+    SUPPORTED_BACKGROUND_MODES = {"LIGHT", "DARK", "AUTO", "COLOR"}
+
     def __init__(self, config_dir: Optional[str] = None):
-        """
-        Motoru başlat.
-        
-        Args:
-            config_dir: Konfigürasyon dosyalarının dizini (opsiyonel)
-        """
         self.stones = load_stones(config_dir)
         self.palette = load_palette(config_dir)
-    
+
     def process(
         self,
         image_path: str,
-        fabric_width_mm: float = 1000,
+        fabric_width_mm: float = 1000.0,
         fabric_height_mm: Optional[float] = None,
-        stone_sizes: List[str] = None,
-        colors: List[str] = None,
+        stone_sizes: Optional[List[str]] = None,
+        colors: Optional[List[str]] = None,
         style: str = "balanced",
         density: float = 0.65,
         gap_mm: float = 0.5,
         laser_tolerance_mm: float = 0.3,
         budget_tl: Optional[float] = None,
         exclude_background: bool = True,
-        background_mode: str = "auto",
+        background_mode: str = "AUTO",
+        background_threshold: int = 245,
+        background_tolerance: float = 28.0,
+        background_color: str = "#F5F5F5",
+        edge_sensitivity: float = 0.5,
+        detail_sensitivity: float = 0.5,
+        custom_palette_hex: Optional[List[str]] = None,
+        exclusion_rect: Optional[Sequence[float]] = None,
+        sprinkle: bool = False,
+        exclude_dark_stones: bool = False,
+        dark_stone_threshold: int = 70,
+        excluded_stone_groups: Optional[List[List[str]]] = None,
+        edge_only: bool = False,
+        edge_threshold: int = 80,
+        grid_snap: bool = False,
+        analysis_max_dimension: int = 1600,
         output_csv: Optional[str] = None,
-        progress_callback=None
+        progress_callback=None,
     ) -> Dict[str, Any]:
-        """
-        Görüntüyü işle ve taş yerleşimini hesapla.
-        
-        Args:
-            image_path: İşlenecek görselin yolu
-            fabric_width_mm: Kumaşın fiziksel genişliği (mm)
-            fabric_height_mm: Kumaşın fiziksel yüksekliği (mm), opsiyonel
-            stone_sizes: Kullanılacak taş boyutları ["SS10", "SS16"]
-            colors: Kullanılacak renkler ["Crystal", "Black"]
-            style: Yerleştirme stili ("balanced", "edge", "fill", "scatter")
-            density: Taş yoğunluğu (0.1 - 1.0)
-            gap_mm: Taşlar arası boşluk (mm)
-            laser_tolerance_mm: Lazer kesim toleransı (mm)
-            budget_tl: Maksimum bütçe (TL), opsiyonel
-            exclude_background: Arka planı hariç tut
-            background_mode: Arka plan modu ("light", "dark", "auto", "color")
-            output_csv: CSV çıktı dosya yolu, opsiyonel
-            progress_callback: İlerleme callback fonksiyonu
-            
-        Returns:
-            Sonuç dictionary:
-                - success: bool
-                - stone_count: int
-                - total_cost_tl: float
-                - used_colors: int
-                - width_mm: float
-                - height_mm: float
-                - stones: List[Dict]
-        """
-        progress = progress_callback or (lambda v, m: None)
-        
-        # Varsayılan değerleri ayarla
-        if stone_sizes is None:
-            stone_sizes = ["SS10"]
-        if colors is None:
-            colors = [c.name for c in self.palette[:4]]  # İlk 4 renk
-        
-        # Parametre doğrulama
-        self._validate_parameters(stone_sizes, colors)
-        
-        # Görsel yükle
+        progress = progress_callback or (lambda _value, _message: None)
+        self._validate_request(
+            image_path=image_path,
+            fabric_width_mm=fabric_width_mm,
+            fabric_height_mm=fabric_height_mm,
+            stone_sizes=stone_sizes,
+            density=density,
+            gap_mm=gap_mm,
+            laser_tolerance_mm=laser_tolerance_mm,
+            style=style,
+            background_mode=background_mode,
+            background_threshold=background_threshold,
+            background_tolerance=background_tolerance,
+            edge_sensitivity=edge_sensitivity,
+            detail_sensitivity=detail_sensitivity,
+            edge_threshold=edge_threshold,
+            analysis_max_dimension=analysis_max_dimension,
+            exclusion_rect=exclusion_rect,
+        )
+
+        stone_sizes = stone_sizes or ["SS10"]
+        selected_stones = [self.stones[name] for name in stone_sizes]
+        selected_palette = self._resolve_palette(colors, custom_palette_hex)
+        style = (style or "balanced").strip().lower()
+        mode = (background_mode or "AUTO").upper()
+
+        if fabric_height_mm is None:
+            fabric_height_mm = self._infer_height(image_path, fabric_width_mm)
+
         image = load_image(image_path)
         progress(10, "Görsel yüklendi")
-        
-        orig_h, orig_w = image.shape[:2]
-        
-        # Yükseklik otomatik hesaplama
-        if fabric_height_mm is None:
-            fabric_height_mm = orig_h * (fabric_width_mm / orig_w)
-        
-        # Görsel boyutunu optimize et
-        image, _ = fit_max_dimension(image, 1600)
+        original_h, original_w = image.shape[:2]
+        image, _ = fit_max_dimension(image, analysis_max_dimension)
         progress(20, "Görsel optimize edildi")
-        
-        # Arka plan maskesi
+
         mask = background_mask(
-            image, 
-            threshold=245, 
-            mode=background_mode.upper(),
-            tolerance=28
-        )
-        progress(30, "Arka plan analiz edildi")
-        
-        # Ön işleme
-        image = preprocess(image, noise_reduction=True, contrast=True)
+            image,
+            threshold=background_threshold,
+            mode=mode,
+            tolerance=background_tolerance,
+            color=background_color,
+        ) if exclude_background else np.ones(image.shape[:2], dtype=bool)
+
+        mask = self._apply_exclusion(mask, exclusion_rect)
+        progress(30, "Çalışma alanı belirlendi")
+
+        processed = preprocess(image, noise_reduction=True, contrast=True)
         progress(40, "Görsel iyileştirildi")
-        
-        # Kenar algılama
-        edges = edge_map(image, sensitivity=0.5)
+
+        edges = edge_map(processed, sensitivity=edge_sensitivity)
         progress(50, "Kenarlar tespit edildi")
-        
-        # Stil bazlı ağırlıklar ve fill_interior parametresi
-        weights = self._get_style_weights(style)
-        
-        # fill_interior: serpme (sprinkle) ve sadece kenar (edge_only) hariç tüm modlarda iç alanı doldur
-        # Bu sayede seçili kenarların DIŞI değil İÇİ doldurulur
-        fill_interior = not style.lower() in ["scatter", "edge"]
-        weights['fill_interior'] = fill_interior
-        
-        # Grid snap ve interactive_mask parametrelerini ekle
-        # Not: interactive_mask şu an None, gelecekte kullanıcı etkileşimi ile doldurulabilir
-        weights['grid_snap'] = False  # Varsayılan olarak kapalı
-        weights['interactive_mask'] = None
-        
-        # Aday noktaları oluştur
-        selected_stones = [self.stones[size] for size in stone_sizes]
-        selected_colors = [c for c in self.palette if c.name in colors]
-        
+
+        weights = self._get_style_weights(style, detail_sensitivity)
+        weights["fill_interior"] = style == "fill" or style == "balanced"
+        weights["grid_snap"] = bool(grid_snap)
+        weights["interactive_mask"] = None
+        weights["sprinkle"] = bool(sprinkle or style == "scatter")
+        weights["exclude_dark"] = bool(exclude_dark_stones)
+        weights["dark_threshold"] = int(dark_stone_threshold)
+        weights["edge_only"] = bool(edge_only or style == "edge")
+        weights["edge_threshold"] = int(edge_threshold)
+
         candidates = create_candidates(
-            image=image,
+            image=processed,
             valid_mask=mask,
             edge=edges,
             stones=selected_stones,
-            palette=selected_colors,
+            palette=selected_palette,
             density=density,
-            **weights
+            **weights,
         )
         progress(65, "Aday noktalar oluşturuldu")
-        
-        # Yoğunluk ayarı
+
+        candidates = self._filter_excluded_groups(candidates, excluded_stone_groups)
         candidates = adaptive_prune(candidates, density)
         progress(70, "Yoğunluk optimize edildi")
-        
-        # Çarpışma çözme
-        image_step_mm = fabric_width_mm / image.shape[1]
-        gap_px = gap_mm / image_step_mm
-        
+
+        image_step_mm = fabric_width_mm / max(1, processed.shape[1])
+        gap_px = gap_mm / max(image_step_mm, 1e-9)
         if len(selected_stones) == 1:
-            radius_px = (selected_stones[0].diameter_mm / image_step_mm) / 2.0
+            radius_px = (selected_stones[0].diameter_mm / max(image_step_mm, 1e-9)) / 2.0
             candidates = resolve_collisions(candidates, radius_px, gap_px)
         else:
             candidates = resolve_variable_collisions(
-                assign_stones(candidates, selected_stones),
-                image_step_mm,
-                gap_mm
+                assign_stones(candidates, selected_stones), image_step_mm, gap_mm
             )
         progress(80, "Çarpışmalar çözüldü")
-        
-        # Yerleşimlere dönüştür
+
         placements = to_placements(
             points=candidates,
             stone=selected_stones[0],
             width_mm=fabric_width_mm,
             height_mm=fabric_height_mm,
-            image_width=image.shape[1],
-            image_height=image.shape[0],
-            laser_tolerance=laser_tolerance_mm
+            image_width=processed.shape[1],
+            image_height=processed.shape[0],
+            laser_tolerance=laser_tolerance_mm,
         )
         progress(90, "Yerleşim hesaplandı")
-        
-        # Bütçe optimizasyonu
+
         if budget_tl is not None:
-            prices = {s.name: s.price_tl for s in selected_stones}
-            placements = optimize_budget(placements, selected_stones[0].price_tl, budget_tl, prices)
+            prices = {stone.name: stone.price_tl for stone in selected_stones}
+            placements = optimize_budget(
+                placements,
+                selected_stones[0].price_tl,
+                float(budget_tl),
+                prices,
+            )
             progress(95, "Bütçe optimize edildi")
-        
-        # CSV export
+
         if output_csv:
             export_csv(placements, output_csv)
-        
-        # Sonuçları hazırla
-        used_colors = len({p.color_name for p in placements})
-        
-        result = {
+
+        cost_by_stone = {stone.name: stone.price_tl for stone in selected_stones}
+        total_cost = sum(cost_by_stone.get(item.stone_name, 0.0) for item in placements)
+        used_colors = len({item.color_name for item in placements})
+        density_ratio = len(placements) / max(1, len(candidates))
+
+        progress(100, "Tamamlandı")
+        return {
             "success": True,
             "stone_count": len(placements),
-            "total_cost_tl": round(sum(
-                next((s.price_tl for s in selected_stones if s.name == p.stone_name), 0)
-                for p in placements
-            ), 2),
+            "total_cost_tl": round(total_cost, 2),
             "used_colors": used_colors,
-            "width_mm": round(fabric_width_mm, 3),
-            "height_mm": round(fabric_height_mm, 3),
-            "average_density": round(len(placements) / max(1, len(candidates)), 4),
-            "stones": [p.to_dict() for p in placements],
+            "width_mm": round(float(fabric_width_mm), 3),
+            "height_mm": round(float(fabric_height_mm), 3),
+            "average_density": round(float(density_ratio), 4),
+            "source_width_px": int(original_w),
+            "source_height_px": int(original_h),
+            "analysis_width_px": int(processed.shape[1]),
+            "analysis_height_px": int(processed.shape[0]),
+            "stones": [item.to_dict() for item in placements],
         }
-        
-        progress(100, "Tamamlandı")
+
+    def _infer_height(self, image_path: str, width_mm: float) -> float:
+        image = load_image(image_path)
+        h, w = image.shape[:2]
+        if w <= 0:
+            raise ValueError("Görsel genişliği hesaplanamadı")
+        return float(h * (width_mm / w))
+
+    def _validate_request(self, **kwargs) -> None:
+        path = kwargs["image_path"]
+        if not path or not Path(path).is_file():
+            raise FileNotFoundError(f"Görsel bulunamadı: {path}")
+        width = kwargs["fabric_width_mm"]
+        height = kwargs["fabric_height_mm"]
+        if width is None or float(width) <= 0:
+            raise ValueError("Kumaş genişliği 0'dan büyük olmalıdır")
+        if height is not None and float(height) <= 0:
+            raise ValueError("Kumaş yüksekliği 0'dan büyük olmalıdır")
+        density = float(kwargs["density"])
+        if not 0.01 <= density <= 1.0:
+            raise ValueError("Yoğunluk 0.01 ile 1.0 arasında olmalıdır")
+        for name, minimum in (("gap_mm", 0.0), ("laser_tolerance_mm", 0.0), ("background_tolerance", 0.0)):
+            if float(kwargs[name]) < minimum:
+                raise ValueError(f"{name} negatif olamaz")
+        for name in ("background_threshold", "edge_threshold", "analysis_max_dimension"):
+            if int(kwargs[name]) <= 0:
+                raise ValueError(f"{name} 0'dan büyük olmalıdır")
+        for name in ("edge_sensitivity", "detail_sensitivity"):
+            value = float(kwargs[name])
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} 0 ile 1 arasında olmalıdır")
+        style = str(kwargs["style"] or "balanced").lower()
+        if style not in self.SUPPORTED_STYLES:
+            raise ValueError(f"Desteklenmeyen stil: {style}")
+        mode = str(kwargs["background_mode"] or "AUTO").upper()
+        if mode not in self.SUPPORTED_BACKGROUND_MODES:
+            raise ValueError(f"Desteklenmeyen arka plan modu: {mode}")
+        sizes = kwargs["stone_sizes"] or ["SS10"]
+        invalid = [size for size in sizes if size not in self.stones]
+        if invalid:
+            raise ValueError(f"Bilinmeyen taş boyutları: {', '.join(invalid)}")
+        rect = kwargs.get("exclusion_rect")
+        if rect is not None:
+            if len(rect) != 4 or any(float(v) < 0 or float(v) > 1 for v in rect):
+                raise ValueError("exclusion_rect [x,y,w,h] normalize edilmiş 0..1 değerlerinden oluşmalıdır")
+
+    def _resolve_palette(
+        self,
+        colors: Optional[List[str]],
+        custom_hex: Optional[List[str]],
+    ) -> List[PaletteColor]:
+        if custom_hex:
+            result = []
+            for index, value in enumerate(custom_hex):
+                value = str(value).strip().upper()
+                if not HEX_RE.match(value):
+                    raise ValueError(f"Geçersiz özel renk: {value}")
+                rgb = tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+                result.append(PaletteColor(f"CUSTOM_{index + 1}", value, rgb))
+            return result
+
+        if colors:
+            requested = {str(value).strip().lower() for value in colors}
+            result = [color for color in self.palette if color.name.lower() in requested or color.hex.lower() in requested]
+            if not result:
+                raise ValueError("Seçilen renkler mevcut rhinestone paletiyle eşleşmedi")
+            return result
+
+        return list(self.palette[:4])
+
+    @staticmethod
+    def _apply_exclusion(mask: np.ndarray, rect: Optional[Sequence[float]]) -> np.ndarray:
+        if rect is None:
+            return mask
+        x, y, width, height = [float(v) for v in rect]
+        h, w = mask.shape[:2]
+        left = max(0, min(w, int(round(x * w))))
+        top = max(0, min(h, int(round(y * h))))
+        right = max(left, min(w, int(round((x + width) * w))))
+        bottom = max(top, min(h, int(round((y + height) * h))))
+        result = mask.copy()
+        result[top:bottom, left:right] = False
         return result
-    
-    def _validate_parameters(self, stone_sizes: List[str], colors: List[str]):
-        """Parametreleri doğrula."""
-        invalid_sizes = [s for s in stone_sizes if s not in self.stones]
-        if invalid_sizes:
-            raise ValueError(f"Bilinmeyen taş boyutları: {', '.join(invalid_sizes)}")
-        
-        if not colors:
-            raise ValueError("En az bir renk seçilmelidir")
-    
-    def _get_style_weights(self, style: str) -> Dict[str, float]:
-        """Stil bazlı ağırlıkları döndür."""
+
+    @staticmethod
+    def _filter_excluded_groups(points, excluded_groups):
+        if not excluded_groups:
+            return points
+        excluded = {(str(item[0]).lower(), str(item[1]).lower()) for item in excluded_groups if len(item) >= 2}
+        return [point for point in points if (point[2].name.lower(), point[2].hex.lower()) not in excluded]
+
+    @staticmethod
+    def _get_style_weights(style: str, detail_sensitivity: float) -> Dict[str, float]:
         styles = {
-            "balanced": {"edge_weight": 0.30, "detail_weight": 0.15, "color_weight": 0.45, "local_weight": 0.10},
-            "edge": {"edge_weight": 0.60, "detail_weight": 0.10, "color_weight": 0.20, "local_weight": 0.10},
-            "fill": {"edge_weight": 0.15, "detail_weight": 0.10, "color_weight": 0.60, "local_weight": 0.15},
-            "scatter": {"edge_weight": 0.20, "detail_weight": 0.20, "color_weight": 0.30, "local_weight": 0.30},
+            "balanced": (0.30, 0.15, 0.45, 0.10),
+            "edge": (0.60, 0.10, 0.20, 0.10),
+            "fill": (0.15, 0.10, 0.60, 0.15),
+            "scatter": (0.20, 0.20, 0.30, 0.30),
         }
-        return styles.get(style.lower(), styles["balanced"])
+        edge_w, detail_w, color_w, local_w = styles[style]
+        detail_w = max(0.0, min(1.0, detail_w * (0.5 + detail_sensitivity)))
+        return {
+            "edge_weight": edge_w,
+            "detail_weight": detail_w,
+            "color_weight": color_w,
+            "local_weight": local_w,
+        }
 
 
-# Kolay kullanım için wrapper fonksiyon
 def process_image(
     image_path: str,
-    fabric_width_mm: float = 1000,
-    stone_sizes: List[str] = None,
-    colors: List[str] = None,
+    fabric_width_mm: float = 1000.0,
+    stone_sizes: Optional[List[str]] = None,
+    colors: Optional[List[str]] = None,
     style: str = "balanced",
     density: float = 0.65,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
-    """
-    Basit arayüz ile görüntü işleme.
-    
-    Örnek:
-        result = process_image(
-            "desen.jpg",
-            fabric_width_mm=1000,
-            stone_sizes=["SS10"],
-            colors=["Crystal", "Black"],
-            style="balanced"
-        )
-    """
-    engine = StonePlacementEngine()
-    return engine.process(
+    return StonePlacementEngine().process(
         image_path=image_path,
         fabric_width_mm=fabric_width_mm,
         stone_sizes=stone_sizes,
         colors=colors,
         style=style,
         density=density,
-        **kwargs
+        **kwargs,
     )
 
 
-# Geriye dönük uyumluluk için eski API
 def kumas_tas_kalip_uretec(
     resim_yolu,
     kumas_genislik_mm=None,
@@ -333,50 +368,47 @@ def kumas_tas_kalip_uretec(
     analysis_max_dimension=1600,
     progress=None,
 ):
-    """Eski API - geriye dönük uyumluluk için."""
-    # Yeni API'ye çevir
-    stone_sizes = tas_boyutlari or [tas_boyutu]
-    
-    # Renk paleti mantığı: Eğer custom_palette_hex varsa onu kullan, yoksa palet_renkleri'ni kullan
-    # custom_palette_hex boş değilse, sadece bu hex renklerini kullan (palet seçimlerini yoksay)
-    if custom_palette_hex and len(custom_palette_hex) > 0:
-        colors = custom_palette_hex
-    else:
-        colors = palet_renkleri or []
-    
-    # Stil belirleme
+    mode = str(calisma_modu or "FULL").upper()
+    style = {"FULL": "balanced", "EDGE": "edge", "FILL": "fill", "SCATTER": "scatter", "BUDGET": "balanced"}.get(mode, "balanced")
     if edge_only:
         style = "edge"
-    elif serpme:
+    if serpme:
         style = "scatter"
-    elif yogunluk > 0.8:
-        style = "fill"
-    else:
-        style = "balanced"
-    
-    engine = StonePlacementEngine()
-    return engine.process(
+    return StonePlacementEngine().process(
         image_path=resim_yolu,
-        fabric_width_mm=kumas_genislik_mm,
+        fabric_width_mm=float(kumas_genislik_mm or 1000.0),
         fabric_height_mm=kumas_yukseklik_mm,
-        stone_sizes=stone_sizes,
-        colors=colors,
+        stone_sizes=tas_boyutlari or [tas_boyutu],
+        colors=palet_renkleri or None,
         style=style,
-        density=yogunluk,
-        gap_mm=gap_mm,
-        laser_tolerance_mm=lazer_tolerans_mm,
+        density=float(yogunluk),
+        gap_mm=float(gap_mm),
+        laser_tolerance_mm=float(lazer_tolerans_mm),
         budget_tl=hedef_butce_tl if maliyet_kisitlamasi_aktif else None,
         background_mode=arka_plan_modu,
+        background_threshold=int(arka_plan_esigi),
+        background_tolerance=float(arka_plan_toleransi),
+        background_color=arka_plan_rengi,
+        edge_sensitivity=float(kenar_hassasiyeti),
+        detail_sensitivity=float(detay_hassasiyeti),
+        custom_palette_hex=custom_palette_hex,
+        exclusion_rect=exclusion_rect,
+        sprinkle=bool(serpme),
+        exclude_dark_stones=bool(koyu_taslari_haric),
+        dark_stone_threshold=int(koyu_esik),
+        excluded_stone_groups=excluded_stone_groups,
+        edge_only=bool(edge_only),
+        edge_threshold=int(edge_threshold),
+        analysis_max_dimension=int(analysis_max_dimension),
         output_csv=output_csv,
         progress_callback=progress,
     )
 
 
 def run_request(request, progress=None):
-    """JSON request işleme - geriye dönük uyumluluk."""
     return kumas_tas_kalip_uretec(
         resim_yolu=request["image_path"],
-        kumas_genislik_mm=request.get("width_mm"),
+        kumas_genislik_mm=request.get("width_mm") or 1000.0,
         kumas_yukseklik_mm=request.get("height_mm"),
         tas_boyutu=request.get("stone_size", "SS10"),
         tas_boyutlari=request.get("stone_sizes"),
@@ -387,13 +419,11 @@ def run_request(request, progress=None):
         kenar_hassasiyeti=float(request.get("edge_sensitivity", 0.5)),
         detay_hassasiyeti=float(request.get("detail_sensitivity", 0.5)),
         arka_plan_esigi=int(request.get("background_threshold", 245)),
-        arka_plan_modu=request.get("background_mode", "LIGHT"),
+        arka_plan_modu=request.get("background_mode", "AUTO"),
         arka_plan_toleransi=float(request.get("background_tolerance", 28)),
         calisma_modu=request.get("mode", "FULL"),
-        maliyet_hesapla=True,
         maliyet_kisitlamasi_aktif=bool(request.get("budget_enabled", False)),
         hedef_butce_tl=request.get("target_budget_tl"),
-        tas_birim_maliyeti_tl=request.get("stone_unit_price_tl"),
         exclusion_rect=request.get("exclusion_rect"),
         arka_plan_rengi=request.get("background_color", "#F5F5F5"),
         custom_palette_hex=request.get("custom_palette_hex"),
