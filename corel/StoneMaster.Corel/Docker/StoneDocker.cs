@@ -13,10 +13,6 @@ namespace StoneMaster.Corel.Docker
         {
             MainPlugin.Attach(app);
             InitializeComponent();
-            DataContext = new UI.StoneDockerViewModel(MainPlugin.Corel, MainPlugin.Engine, MainPlugin.Settings);
-
-            if (openFloatingWindow)
-                Loaded += (_, __) => StoneFloatingWindow.Open(MainPlugin.Corel.Application);
         }
     }
 }
