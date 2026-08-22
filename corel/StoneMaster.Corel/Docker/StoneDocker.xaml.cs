@@ -542,7 +542,8 @@ namespace StoneMaster.Corel.Docker
             {
                 // Analiz edilen ve seçili renkleri kullan
                 Vm.PaletteColors = new List<string>(); // Boş bırak, custom_palette_hex kullanılacak
-                Vm.CustomPaletteHex = analyzedColors.Select(c => c.Hex).ToList();
+                Vm.CustomPaletteHex.Clear();
+                Vm.CustomPaletteHex.AddRange(analyzedColors.Select(c => c.Hex).ToList());
             }
             else if (Vm.CustomPaletteHex != null && Vm.CustomPaletteHex.Count > 0)
             {
@@ -553,7 +554,7 @@ namespace StoneMaster.Corel.Docker
             {
                 // Normal palet renklerini kullan
                 Vm.PaletteColors = GetCheckedValues(cmbPalette);
-                Vm.CustomPaletteHex = new List<string>();
+                Vm.CustomPaletteHex.Clear();
             }
             
             // Arka plan modu - ComboBox'tan seçilen metni al
